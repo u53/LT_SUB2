@@ -36,17 +36,25 @@ export interface PricingFormEntry {
   per_request_price: number | string | null
   intervals: IntervalFormEntry[]
   time_pricing: TimePricingFormEntry
+  // 价格录入币种（ISO 4217）；留空表示与记账币种相同。
+  currency?: string
 }
 
 export interface TimePricingPeriodFormEntry {
   start_time: string
   end_time: string
   multiplier: number | string
+  // 绝对价（与基础价同单位）：任一非空时直接替换该分项单价，用于峰谷不同价。
+  input_price?: number | string | null
+  output_price?: number | string | null
+  cache_write_price?: number | string | null
+  cache_read_price?: number | string | null
 }
 
 export interface TimePricingFormEntry {
   timezone: string
   weekdays_only: boolean
+  holidays: string[]
   periods: TimePricingPeriodFormEntry[]
 }
 
@@ -71,7 +79,7 @@ export const COMMON_TIMEZONES = [
 ]
 
 export function createDefaultTimePricingForm(): TimePricingFormEntry {
-  return { timezone: DEFAULT_TIME_PRICING_TIMEZONE, weekdays_only: false, periods: [] }
+  return { timezone: DEFAULT_TIME_PRICING_TIMEZONE, weekdays_only: false, holidays: [], periods: [] }
 }
 
 export function apiTimePricingToForm(value: ChannelTimePricing | null | undefined): TimePricingFormEntry {
@@ -79,12 +87,23 @@ export function apiTimePricingToForm(value: ChannelTimePricing | null | undefine
   return {
     timezone: value.timezone || DEFAULT_TIME_PRICING_TIMEZONE,
     weekdays_only: value.weekdays_only === true,
+    holidays: Array.isArray(value.holidays) ? [...value.holidays] : [],
     periods: (value.periods || []).map(period => ({
       start_time: LEGACY_CLOCK_TIME.test(period.start_time) ? `${period.start_time}:00` : period.start_time,
       end_time: LEGACY_CLOCK_TIME.test(period.end_time) ? `${period.end_time}:00` : period.end_time,
       multiplier: Number(period.multiplier).toFixed(2),
+      input_price: period.input_price ?? null,
+      output_price: period.output_price ?? null,
+      cache_write_price: period.cache_write_price ?? null,
+      cache_read_price: period.cache_read_price ?? null,
     })),
   }
+}
+
+function toNullablePrice(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined || value === '') return null
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : null
 }
 
 export function formTimePricingToAPI(value: TimePricingFormEntry | null | undefined): ChannelTimePricing | null {
@@ -93,10 +112,15 @@ export function formTimePricingToAPI(value: TimePricingFormEntry | null | undefi
   return {
     timezone,
     weekdays_only: value.weekdays_only === true,
+    ...(value.holidays?.length ? { holidays: value.holidays } : {}),
     periods: value.periods.map(period => ({
       start_time: period.start_time,
       end_time: period.end_time,
-      multiplier: Number(period.multiplier),
+      multiplier: Number(period.multiplier) || 1,
+      ...(toNullablePrice(period.input_price) !== null ? { input_price: toNullablePrice(period.input_price) } : {}),
+      ...(toNullablePrice(period.output_price) !== null ? { output_price: toNullablePrice(period.output_price) } : {}),
+      ...(toNullablePrice(period.cache_write_price) !== null ? { cache_write_price: toNullablePrice(period.cache_write_price) } : {}),
+      ...(toNullablePrice(period.cache_read_price) !== null ? { cache_read_price: toNullablePrice(period.cache_read_price) } : {}),
     })),
   }
 }
@@ -138,10 +162,20 @@ export function validateTimePricing(value: TimePricingFormEntry, t: TranslateFn)
     const end = timeToSeconds(period.end_time, true)
     if (start >= end) return timePricingValidationMessage(t, 'range')
 
-    if (!isValidTimePricingMultiplier(period.multiplier)) {
+    // 配置了绝对价的时段由绝对价决定单价，倍率仅作兜底，不参与校验。
+    const hasAbsolutePrice = [period.input_price, period.output_price, period.cache_write_price, period.cache_read_price]
+      .some(price => price !== null && price !== undefined && price !== '')
+    if (!hasAbsolutePrice && !isValidTimePricingMultiplier(period.multiplier)) {
       return timePricingValidationMessage(t, 'multiplier')
     }
     periods.push({ start, end })
+  }
+
+  // 节假日必须是 YYYY-MM-DD，避免脏数据让整份时段表静默失效。
+  for (const holiday of value.holidays || []) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(holiday)) {
+      return timePricingValidationMessage(t, 'holiday')
+    }
   }
 
   const sorted = [...periods].sort((a, b) => a.start - b.start)

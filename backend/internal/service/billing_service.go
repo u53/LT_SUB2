@@ -7,10 +7,12 @@ import (
 	"log"
 	"maps"
 	"math"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/calendar"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
@@ -121,6 +123,16 @@ type ModelPricing struct {
 	LongContextOutputMultiplier        float64            // 长上下文整次会话输出倍率
 	ImageOutputPricePerToken           float64            // 图片输出 token 价格 (USD)
 	ImageOutputPriceExplicit           bool               // 是否由渠道定价显式设定（为 true 时即使 == 0 也不回退）
+
+	// Currency 是该价格条目的录入币种（ISO 4217）。空值表示与记账币种相同。
+	// 目录与内置兜底价为 USD；国产模型可配 CNY 直接录入人民币官网价。
+	// 计费前由 PricingCurrencyConverter 折成记账币种，见 calculateTokenCost。
+	Currency string
+	// TimePricing 是价格条目自带的时段定价（峰谷价档）。
+	// 用于表达上游官方的峰谷口径（如 DeepSeek 工作日高峰 2 倍），
+	// 使峰谷成为可配置数据而不是散落在计费代码里的硬编码。
+	// 渠道/分组配置的 TimePricing 优先于这里的默认值。
+	TimePricing *ChannelTimePricing
 }
 
 func normalizeBillingServiceTier(serviceTier string) string {
@@ -265,17 +277,32 @@ func resolvedChannelTimeMultiplier(resolved *ResolvedPricing, at time.Time) floa
 // sources can price the requested model.
 var ErrModelPricingUnavailable = errors.New("pricing not found")
 
-// ---- DeepSeek 官方低谷价（$/token）----
-// 2026-09-10 官方公告：DeepSeek-V4.1-Flash（新名 deepseek-flash）大幅降价，
-// Flash 低谷价降为 $0.15/$0.60/$0.003 per MTok（输入缓存未命中/输出/缓存命中）；
-// deepseek-v4-pro 名义价格暂不变，但自北京时间 2026-09-14 12:00（04:00 UTC）起
-// 其请求被上游路由到 V4.1-Flash 并按 Flash 价计费（见 deepseekProBilledAsFlash）。
+// ---- DeepSeek 官方价（低谷价，按记账币种二选一）----
+// 官方定价页同时给出人民币与美元两张价目表，两者不是同一汇率换算的结果
+// （Flash 隐含 6.67、Pro 隐含 6.82），因此不能只维护一套再折算。
+// 这里按记账币种选择对应的官网价目表：人民币记账用人民币表，美元记账用美元表。
+//
+// 2026-09-10 公告：V4.1-Flash（模型名 deepseek-flash）上线，V4-Flash 与
+// V4-Flash-Vision-Exp 下线但仍兼容路由到 V4.1-Flash；
+// 自 2026-09-14 04:00 UTC 起 deepseek-v4-pro 请求全部路由到 V4.1-Flash，
+// 按 V4.1-Flash 价格计费，直到 V4.1-Pro 上线（见 deepseekProBilledAsFlash）。
 // Source: https://api-docs.deepseek.com/news/news260910
 //
-//	https://api-docs.deepseek.com/quick_start/pricing
+//	https://api-docs.deepseek.com/zh-cn/quick_start/pricing
 //
-// 高峰价 = 2× 低谷价；高峰时段 01:00–04:00 与 06:00–10:00 UTC（仅工作日），
-// 北京时间周六/周日全天低谷。时段判定见 deepseekPeakMultiplierAt。
+// 高峰价 = 2× 低谷价。高峰时段为北京时间周一至周五（不含中国法定节假日）
+// 09:00–12:00 与 14:00–18:00；其余时段（含周末与法定节假日全天）为低谷。
+const (
+	// 人民币官网价（元 / 百万 tokens）
+	deepseekFlashCNYOffPeakInputPrice  = 1.0 / 1_000_000  // ¥1 / MTok（缓存未命中）
+	deepseekFlashCNYOffPeakOutputPrice = 4.0 / 1_000_000  // ¥4 / MTok
+	deepseekFlashCNYOffPeakCacheRead   = 0.02 / 1_000_000 // ¥0.02 / MTok（缓存命中）
+	deepseekProCNYOffPeakInputPrice    = 4.5 / 1_000_000  // ¥4.5 / MTok（缓存未命中）
+	deepseekProCNYOffPeakOutputPrice   = 13.5 / 1_000_000 // ¥13.5 / MTok
+	deepseekProCNYOffPeakCacheRead     = 0.15 / 1_000_000 // ¥0.15 / MTok（缓存命中）
+)
+
+// deepseekUSDOffPeak 是美元官网低谷价（美元 / token），供 USD 记账部署使用。
 const (
 	deepseekFlashOffPeakInputPrice  = 1.5e-7  // $0.15 per MTok (cache miss)
 	deepseekFlashOffPeakOutputPrice = 6.0e-7  // $0.60 per MTok
@@ -284,6 +311,41 @@ const (
 	deepseekProOffPeakOutputPrice   = 1.98e-6 // $1.98 per MTok
 	deepseekProOffPeakCacheRead     = 2.2e-8  // $0.022 per MTok (cache hit)
 )
+
+// deepseekCNYHolidays 返回内置的中国法定节假日日期表。
+//
+// 数据来源：国务院办公厅每年发布的《关于次年部分节假日安排的通知》
+// （见 backend/internal/calendar/cn_holidays.json 中每年的 source 字段）。
+// 节假日日期无法从公历推算（春节/清明/端午/中秋依赖农历与节气，且含调休），
+// 因此以数据形式随二进制维护，每年追加即可，不需要改计费代码。
+func deepseekCNYHolidays() []string {
+	set, err := calendar.CNHolidays()
+	if err != nil || len(set) == 0 {
+		// 数据缺失时返回空表：节假日按工作日处理（保守方向，不会少收费）。
+		return nil
+	}
+	dates := make([]string, 0, len(set))
+	for date := range set {
+		dates = append(dates, date)
+	}
+	sort.Strings(dates)
+	return dates
+}
+
+// deepseekTimePricing 返回 DeepSeek 官方峰谷时段表。
+// 作为价格条目的默认时段表挂在 fallback 价卡上：运营者可在管理端看到并覆盖，
+// 而不是埋在 Go 常量里只能改代码。
+func deepseekTimePricing() *ChannelTimePricing {
+	return &ChannelTimePricing{
+		Timezone:     "Asia/Shanghai",
+		WeekdaysOnly: true,
+		Holidays:     deepseekCNYHolidays(),
+		Periods: []ChannelTimePricingPeriod{
+			{StartTime: "09:00", EndTime: "12:00", Multiplier: 2.0},
+			{StartTime: "14:00", EndTime: "18:00", Multiplier: 2.0},
+		},
+	}
+}
 
 // isDeepSeekModel 判断模型名是否为 DeepSeek 模型（大小写不敏感）。
 // 任意 deepseek- 前缀均视为 DeepSeek 模型：官方模型（v4-flash / v4-pro /
@@ -296,20 +358,13 @@ func isDeepSeekModel(model string) bool {
 }
 
 // deepseekPeakMultiplierAt 返回指定时刻的 DeepSeek 官方峰谷定价因子。
-// 官方口径（2026-08-23 起生效）：高峰价 = 2× 低谷价；高峰时段为
-// 01:00–04:00 与 06:00–10:00 UTC（半开区间），仅工作日；
-// 周末（北京时间周六/周日）全天低谷。北京时间用固定 +8 偏移（无夏令时）。
+// 官方口径：高峰价 = 2× 低谷价；高峰时段为北京时间周一至周五（不含中国法定
+// 节假日）09:00–12:00 与 14:00–18:00（等价于 01:00–04:00、06:00–10:00 UTC）；
+// 其余时段（含周末与法定节假日全天）为低谷。
+//
+// 判定统一走时段定价引擎，避免峰谷口径在代码里出现第二份实现。
 func deepseekPeakMultiplierAt(now time.Time) float64 {
-	beijing := now.In(time.FixedZone("Asia/Shanghai", 8*3600))
-	switch beijing.Weekday() {
-	case time.Saturday, time.Sunday:
-		return 1.0
-	}
-	switch h := now.UTC().Hour(); {
-	case h >= 1 && h < 4, h >= 6 && h < 10:
-		return 2.0
-	}
-	return 1.0
+	return deepseekTimePricing().MultiplierAt(now)
 }
 
 // deepseekProRoutesToFlashAt：官方公告自北京时间 2026-09-14 12:00（04:00 UTC）起，
@@ -339,6 +394,10 @@ type BillingService struct {
 	pricingService *PricingService
 	fallbackPrices map[string]*ModelPricing // 硬编码回退价格
 
+	// currencyConverter 把价格条目的录入币种折成记账币种。
+	// 为 nil 时按 USD 记账（保持既有测试与零值构造的行为）。
+	currencyConverter *PricingCurrencyConverter
+
 	// fallbackWarnSeen 记录已打过 fallback 警告日志的(已小写化)模型名,
 	// 让 "[Billing] Using fallback pricing" 每个模型每进程最多打一条,
 	// 避免热路径上每请求刷屏(issue #3394)。零值即可用,无需在构造函数初始化。
@@ -352,6 +411,9 @@ func NewBillingService(cfg *config.Config, pricingService *PricingService) *Bill
 		pricingService: pricingService,
 		fallbackPrices: make(map[string]*ModelPricing),
 	}
+	if cfg != nil {
+		s.currencyConverter = NewPricingCurrencyConverter(cfg.Billing)
+	}
 
 	// 初始化硬编码回退价格（当动态价格不可用时使用）
 	s.initFallbackPricing()
@@ -359,8 +421,96 @@ func NewBillingService(cfg *config.Config, pricingService *PricingService) *Bill
 	return s
 }
 
+// AccountingCurrency 返回记账币种。未配置转换器时按 USD。
+func (s *BillingService) AccountingCurrency() string {
+	if s == nil || s.currencyConverter == nil {
+		return CurrencyUSD
+	}
+	return s.currencyConverter.AccountingCurrency()
+}
+
+// convertPricingToAccountingCurrency 把价格条目折成记账币种。
+// 缺汇率时保持原价并告警一次（每模型每进程一条），不静默按 1:1 折算。
+func (s *BillingService) convertPricingToAccountingCurrency(model string, pricing *ModelPricing) *ModelPricing {
+	if s == nil || s.currencyConverter == nil || pricing == nil {
+		return pricing
+	}
+	converted, ok := s.currencyConverter.ConvertPricing(pricing)
+	if !ok {
+		key := "currency:" + strings.ToLower(model)
+		if _, seen := s.fallbackWarnSeen.LoadOrStore(key, struct{}{}); !seen {
+			log.Printf("[Billing] Missing FX rate for %s price currency %q (accounting currency %s); using price as-is",
+				model, pricing.Currency, s.AccountingCurrency())
+		}
+	}
+	return converted
+}
+
+// deepseekFallbackPricing 返回按记账币种选取的 DeepSeek 官方低谷价卡。
+//
+// 人民币记账：直接使用人民币官网价，并标记 Currency=CNY。
+// 该标记在记账币种为 CNY 时等价于空值，转换器不会重复折算；
+// 若部署后续把记账币种改回 USD，这些条目会被按汇率折回美元，语义仍然正确。
+//
+// 美元记账：使用美元官网价，Currency 留空（即记账币种）。
+func deepseekFallbackPricing(accountingCurrency string) (pro, flash *ModelPricing) {
+	if accountingCurrency == CurrencyCNY {
+		flash = &ModelPricing{
+			InputPricePerToken:     deepseekFlashCNYOffPeakInputPrice,  // ¥1 / MTok（缓存未命中，低谷）
+			OutputPricePerToken:    deepseekFlashCNYOffPeakOutputPrice, // ¥4 / MTok
+			CacheReadPricePerToken: deepseekFlashCNYOffPeakCacheRead,   // ¥0.02 / MTok（缓存命中）
+			SupportsCacheBreakdown: false,
+			Currency:               CurrencyCNY,
+			TimePricing:            deepseekTimePricing(),
+		}
+		pro = &ModelPricing{
+			InputPricePerToken:     deepseekProCNYOffPeakInputPrice,  // ¥4.5 / MTok（缓存未命中，低谷）
+			OutputPricePerToken:    deepseekProCNYOffPeakOutputPrice, // ¥13.5 / MTok
+			CacheReadPricePerToken: deepseekProCNYOffPeakCacheRead,   // ¥0.15 / MTok（缓存命中）
+			SupportsCacheBreakdown: false,
+			Currency:               CurrencyCNY,
+			TimePricing:            deepseekTimePricing(),
+		}
+		return pro, flash
+	}
+	flash = &ModelPricing{
+		InputPricePerToken:     deepseekFlashOffPeakInputPrice,  // $0.15 per MTok (cache miss, off-peak)
+		OutputPricePerToken:    deepseekFlashOffPeakOutputPrice, // $0.60 per MTok
+		CacheReadPricePerToken: deepseekFlashOffPeakCacheRead,   // $0.003 per MTok (cache hit)
+		SupportsCacheBreakdown: false,
+		TimePricing:            deepseekTimePricing(),
+	}
+	pro = &ModelPricing{
+		InputPricePerToken:     deepseekProOffPeakInputPrice,  // $0.66 per MTok (cache miss, off-peak)
+		OutputPricePerToken:    deepseekProOffPeakOutputPrice, // $1.98 per MTok
+		CacheReadPricePerToken: deepseekProOffPeakCacheRead,   // $0.022 per MTok (cache hit)
+		SupportsCacheBreakdown: false,
+		TimePricing:            deepseekTimePricing(),
+	}
+	return pro, flash
+}
+
+// CloneForModel 返回一份独立拷贝，供同一价目挂到多个模型名时避免共享指针。
+// fallbackPrices 中的条目会被计费路径克隆后使用，但初始化阶段仍要隔离，
+// 否则后续对某个模型名的调整会串改其他模型。
+func (p *ModelPricing) CloneForModel() *ModelPricing {
+	if p == nil {
+		return nil
+	}
+	cloned := *p
+	if p.TimePricing != nil {
+		cloned.TimePricing = &ChannelTimePricing{
+			Timezone:     p.TimePricing.Timezone,
+			WeekdaysOnly: p.TimePricing.WeekdaysOnly,
+			Holidays:     append([]string(nil), p.TimePricing.Holidays...),
+			Periods:      append([]ChannelTimePricingPeriod(nil), p.TimePricing.Periods...),
+		}
+	}
+	return &cloned
+}
+
 // initFallbackPricing 初始化硬编码回退价格（当动态价格不可用时使用）
-// 价格单位：USD per token（与LiteLLM格式一致）
+// 价格单位：USD per token（与LiteLLM格式一致）；DeepSeek 按记账币种选价目表
 func (s *BillingService) initFallbackPricing() {
 	// Claude 4.5 Opus
 	s.fallbackPrices["claude-opus-4.5"] = &ModelPricing{
@@ -714,26 +864,15 @@ func (s *BillingService) initFallbackPricing() {
 	// deepseek-v4-flash-vision-exp；deepseek-chat / deepseek-reasoner 已停止服务，
 	// 其余 deepseek-*（含未知型号）统一按 flash 价兜底（见 getFallbackPricing），
 	// 避免计费中断。
-	// 以下均为官方低谷价；高峰价 = 2× 低谷价（高峰时段 01:00–04:00
-	// 与 06:00–10:00 UTC，仅工作日；北京时间周六/周日全天低谷），见 deepseekPeakMultiplierAt。
-	s.fallbackPrices["deepseek-v4-pro"] = &ModelPricing{
-		InputPricePerToken:     deepseekProOffPeakInputPrice,  // $0.66 per MTok (cache miss, off-peak)
-		OutputPricePerToken:    deepseekProOffPeakOutputPrice, // $1.98 per MTok
-		CacheReadPricePerToken: deepseekProOffPeakCacheRead,   // $0.022 per MTok (cache hit)
-		SupportsCacheBreakdown: false,
-	}
-	s.fallbackPrices["deepseek-v4-flash"] = &ModelPricing{
-		InputPricePerToken:     deepseekFlashOffPeakInputPrice,  // $0.15 per MTok (cache miss, off-peak)
-		OutputPricePerToken:    deepseekFlashOffPeakOutputPrice, // $0.60 per MTok
-		CacheReadPricePerToken: deepseekFlashOffPeakCacheRead,   // $0.003 per MTok (cache hit)
-		SupportsCacheBreakdown: false,
-	}
-	s.fallbackPrices["deepseek-v4-flash-vision-exp"] = &ModelPricing{
-		InputPricePerToken:     deepseekFlashOffPeakInputPrice,
-		OutputPricePerToken:    deepseekFlashOffPeakOutputPrice,
-		CacheReadPricePerToken: deepseekFlashOffPeakCacheRead,
-		SupportsCacheBreakdown: false,
-	}
+	//
+	// 价格按记账币种取官方对应价目表：人民币记账用人民币官网价（含 CNY 币种标记），
+	// 美元记账用美元官网价。两张表不是同一汇率换算的结果，不能互相折算。
+	// 峰谷时段表挂在价卡上（deepseekTimePricing），由统一时段引擎应用。
+	deepseekPro, deepseekFlash := deepseekFallbackPricing(s.AccountingCurrency())
+	s.fallbackPrices["deepseek-v4-pro"] = deepseekPro
+	s.fallbackPrices["deepseek-v4-flash"] = deepseekFlash
+	s.fallbackPrices["deepseek-flash"] = deepseekFlash.CloneForModel()
+	s.fallbackPrices["deepseek-v4-flash-vision-exp"] = deepseekFlash.CloneForModel()
 
 	// TypeSafe Jev bills input tokens only: $0.042 per million tokens.
 	s.fallbackPrices["jev-latest"] = &ModelPricing{
@@ -1624,25 +1763,30 @@ func (s *BillingService) calculateTokenCost(resolved *ResolvedPricing, input Cos
 	// 内部已强制过）；分组/渠道自定义定价保留运营者配置，不强制覆盖官方价。
 	pricing = s.applyModelSpecificPricingPolicyEx(input.Model, pricing, resolved.Source == PricingSourceLiteLLM, pricingAt)
 
-	// DeepSeek 模型默认价卡按官方峰谷口径调整：高峰时段（01:00–04:00 与
-	// 06:00–10:00 UTC，仅工作日；北京时间周末全天低谷）按 2× 低谷价计费。
-	// 仅作用于默认价卡（Source=LiteLLM，无分组/渠道自定义定价）——分组/渠道
-	// 自定义定价保持运营者语义，不叠加。先克隆再乘，避免污染共享 fallbackPrices 指针。
-	if resolved.Source == PricingSourceLiteLLM && isDeepSeekModel(input.Model) {
-		if mult := deepseekPeakMultiplierAt(pricingAt); mult > 1 {
-			cloned := *pricing
-			cloned.InputPricePerToken *= mult
-			cloned.OutputPricePerToken *= mult
-			cloned.CacheReadPricePerToken *= mult
-			pricing = &cloned
-		}
+	// 币种折算：价格条目自带币种（国产模型可录人民币官网价，海外模型录美元官网价），
+	// 在倍率之前折成记账币种，使后续所有金额天然同币种。
+	pricing = s.convertPricingToAccountingCurrency(input.Model, pricing)
+
+	// 时段定价（峰谷）：跟随价格条目自身，不再限制 Source。
+	// 分组价、渠道价、目录价各自带时段表；解析到哪条就用哪条。
+	// 使用已回退的 pricingAt，避免请求未装配时点时静默失效。
+	//
+	// 优先级：运营者显式配置的时段表（渠道/分组条目）> 价格条目内置的默认时段表。
+	// 运营者为某模型配了自定义单价时，官方默认峰谷不再自动叠加——
+	// 否则自定义价会被官方口径悄悄改写；需要峰谷就在该条目上显式配置。
+	timePricing := resolved.channelPricingTimePricing()
+	if timePricing == nil && resolved.Source != PricingSourceGroup && resolved.Source != PricingSourceChannel {
+		timePricing = pricing.TimePricing
+	}
+	if timePricing != nil {
+		pricing = applyTimeTier(pricing, timePricing.TimeTierAt(pricingAt))
 	}
 
 	// 官方长上下文阶梯仅在无区间定价时应用（区间定价已包含上下文分层）。
 	applyLongCtx := len(resolved.Intervals) == 0 && contextTierPricingEnabled && !input.DisableModelLongContextPricing
 
 	breakdown := s.computeTokenBreakdown(pricing, input.Tokens, input.RateMultiplier, input.ServiceTier, applyLongCtx)
-	applyCostBreakdownMultiplier(breakdown, resolvedChannelTimeMultiplier(resolved, input.PricingAt))
+	// 时段倍率已在 applyTimeTier 中作用于单价，这里不再重复缩放分项。
 	applyCostBreakdownMultiplier(breakdown, reasoningEffortBillingMultiplier(input.ReasoningEffort, pricing.ReasoningEffortMultipliers))
 	return breakdown, nil
 }
@@ -1919,17 +2063,25 @@ func (s *BillingService) applyModelSpecificPricingPolicyEx(model string, pricing
 	// 对默认价卡另行叠加（分组/渠道自定义定价不叠加）。
 	if forceDeepSeekRates && isDeepSeekModel(model) {
 		cloned := *pricing
+		// 按记账币种取官方价目表；人民币记账用人民币官网价，美元记账用美元官网价。
+		deepseekPro, deepseekFlash := deepseekFallbackPricing(s.AccountingCurrency())
 		if isDeepSeekProModel(model) && !deepseekProBilledAsFlash(pricingAt) {
-			cloned.InputPricePerToken = deepseekProOffPeakInputPrice
-			cloned.OutputPricePerToken = deepseekProOffPeakOutputPrice
-			cloned.CacheReadPricePerToken = deepseekProOffPeakCacheRead
+			cloned.InputPricePerToken = deepseekPro.InputPricePerToken
+			cloned.OutputPricePerToken = deepseekPro.OutputPricePerToken
+			cloned.CacheReadPricePerToken = deepseekPro.CacheReadPricePerToken
 		} else {
 			// deepseek-flash（= V4.1-Flash）、deepseek-v4-flash /
 			// deepseek-v4-flash-vision-exp 与其余 deepseek-* 共用 flash 价；
 			// 切换时点之后的 pro 请求同样按 flash 价计费。
-			cloned.InputPricePerToken = deepseekFlashOffPeakInputPrice
-			cloned.OutputPricePerToken = deepseekFlashOffPeakOutputPrice
-			cloned.CacheReadPricePerToken = deepseekFlashOffPeakCacheRead
+			cloned.InputPricePerToken = deepseekFlash.InputPricePerToken
+			cloned.OutputPricePerToken = deepseekFlash.OutputPricePerToken
+			cloned.CacheReadPricePerToken = deepseekFlash.CacheReadPricePerToken
+		}
+		// 官方价目表自带币种与峰谷时段；保留价格条目原有的时段表配置
+		// （运营者可在管理端覆盖），仅在未配置时回落到官方默认时段。
+		cloned.Currency = deepseekFlash.Currency
+		if cloned.TimePricing == nil {
+			cloned.TimePricing = deepseekFlash.TimePricing
 		}
 		return &cloned
 	}

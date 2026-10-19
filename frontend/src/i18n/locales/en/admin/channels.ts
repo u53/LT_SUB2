@@ -93,7 +93,8 @@ export default {
         format: 'Start and end times must use HH:mm:ss format',
         range: 'Start time must be earlier than end time; split ranges across midnight',
         overlap: 'Time periods must not overlap',
-        multiplier: 'Multiplier must be greater than 0 with at most two decimal places'
+        multiplier: 'Multiplier must be greater than 0 with at most two decimal places',
+        holiday: 'Holidays must use YYYY-MM-DD format'
       },
       deleteConfirm: 'Are you sure you want to delete channel "{name}"? This cannot be undone.',
       columns: {
@@ -125,6 +126,8 @@ export default {
         modelsPlaceholder: 'Type full model name and press Enter',
         modelInputHint: 'Press Enter to add, supports paste for batch import.',
         billingMode: 'Billing Mode',
+        currency: 'Currency',
+        currencyPlaceholder: 'e.g. CNY',
         defaultPrices: 'Default prices (fallback when no interval matches)',
         inputPrice: 'Input',
         outputPrice: 'Output',
@@ -165,6 +168,10 @@ export default {
         startTime: 'Start time',
         endTime: 'End time',
         multiplier: 'Multiplier',
+        absolutePricePlaceholder: 'Blank = use multiplier',
+        timePricingHolidays: 'Holidays (optional)',
+        timePricingHolidaysPlaceholder: '2026-10-01\n2026-10-02',
+        timePricingHolidaysHint: 'One YYYY-MM-DD per line. Those dates skip every period and use the base price (for public holidays that are off-peak all day).',
         removeTimePeriod: 'Remove period',
         minTokens: 'Min',
         maxTokens: 'Max',

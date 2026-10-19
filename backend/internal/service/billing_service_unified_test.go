@@ -251,7 +251,9 @@ func TestCalculateCostUnified_ChannelTimePricingScalesBaseOnUnmatchedInterval(t 
 	require.InDelta(t, 2.0, cost.TotalCost, 1e-12)
 }
 
-func TestCalculateCostUnified_ChannelTimePricingDoesNotApplyToGroupPricing(t *testing.T) {
+func TestCalculateCostUnified_ChannelTimePricingAppliesToGroupPricing(t *testing.T) {
+	// 分组逐模型定价现在支持时段定价（峰谷）：运营者为模型配分组价后
+	// 仍能保留峰谷价档，不再被来源限制吞掉。
 	resolved := channelTimeResolvedForTest(&ModelPricing{InputPricePerToken: 0.001}, nil)
 	resolved.Source = PricingSourceGroup
 	billing := NewBillingService(&config.Config{}, nil)
@@ -265,7 +267,7 @@ func TestCalculateCostUnified_ChannelTimePricingDoesNotApplyToGroupPricing(t *te
 		PricingAt: time.Date(2026, 8, 17, 1, 0, 0, 0, time.UTC),
 	})
 	require.NoError(t, err)
-	require.InDelta(t, 1.0, cost.TotalCost, 1e-12)
+	require.InDelta(t, 2.0, cost.TotalCost, 1e-12)
 }
 
 func TestCalculateCostUnified_ChannelTimePricingDoesNotApplyOutsideMatchingTime(t *testing.T) {

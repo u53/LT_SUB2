@@ -93,7 +93,8 @@ export default {
         format: '开始时间和结束时间必须使用 HH:mm:ss 格式',
         range: '开始时间必须早于结束时间；跨午夜请拆分为两个时间段',
         overlap: '时间段不能重叠',
-        multiplier: '倍率必须大于 0，且最多保留两位小数'
+        multiplier: '倍率必须大于 0，且最多保留两位小数',
+        holiday: '节假日必须使用 YYYY-MM-DD 格式'
       },
       deleteConfirm: '确定要删除渠道「{name}」吗？此操作不可撤销。',
       columns: {
@@ -125,6 +126,8 @@ export default {
         modelsPlaceholder: '输入完整模型名后按回车添加',
         modelInputHint: '按回车添加，支持粘贴批量导入',
         billingMode: '计费模式',
+        currency: '币种',
+        currencyPlaceholder: '如 CNY',
         defaultPrices: '默认价格（未命中区间时使用）',
         inputPrice: '输入',
         outputPrice: '输出',
@@ -165,6 +168,10 @@ export default {
         startTime: '开始时间',
         endTime: '结束时间',
         multiplier: '倍率',
+        absolutePricePlaceholder: '留空则按倍率',
+        timePricingHolidays: '节假日（可选）',
+        timePricingHolidaysPlaceholder: '2026-10-01\n2026-10-02',
+        timePricingHolidaysHint: '每行一个 YYYY-MM-DD。命中当日不套用任何时段，直接按基础价（用于法定节假日全天低谷）。',
         removeTimePeriod: '删除时间段',
         minTokens: '最小',
         maxTokens: '最大',

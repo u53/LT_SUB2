@@ -300,6 +300,18 @@ func filterValidIntervals(intervals []PricingInterval) []PricingInterval {
 	return valid
 }
 
+// channelPricingTimePricing 返回解析结果自带的时段表（渠道价或分组价）。
+// 只有运营者显式配置时段时才返回，用于覆盖价格条目内置的默认时段表。
+func (r *ResolvedPricing) channelPricingTimePricing() *ChannelTimePricing {
+	if r == nil || r.channelPricing == nil {
+		return nil
+	}
+	if r.channelPricing.TimePricing == nil || len(r.channelPricing.TimePricing.Periods) == 0 {
+		return nil
+	}
+	return r.channelPricing.TimePricing
+}
+
 // GetIntervalPricing 根据 context token 数获取区间定价。
 // 如果有区间列表，找到匹配区间并构造 ModelPricing；否则直接返回 BasePricing。
 func (r *ModelPricingResolver) GetIntervalPricing(resolved *ResolvedPricing, totalContextTokens int) *ModelPricing {

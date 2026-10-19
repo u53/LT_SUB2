@@ -74,11 +74,15 @@ type channelModelPricingRequest struct {
 	PerRequestPrice            *float64                   `json:"per_request_price" binding:"omitempty,min=0"`
 	Intervals                  []pricingIntervalRequest   `json:"intervals"`
 	TimePricing                *channelTimePricingRequest `json:"time_pricing"`
+	// Currency 是本条价格的录入币种（ISO 4217），留空表示与记账币种相同。
+	// 国产模型填 CNY 可直接录入人民币官网价，无需人工换算。
+	Currency string `json:"currency" binding:"omitempty,len=3"`
 }
 
 type channelTimePricingRequest struct {
 	Timezone     string                            `json:"timezone"`
 	WeekdaysOnly bool                              `json:"weekdays_only"`
+	Holidays     []string                          `json:"holidays"`
 	Periods      []channelTimePricingPeriodRequest `json:"periods"`
 }
 
@@ -86,6 +90,12 @@ type channelTimePricingPeriodRequest struct {
 	StartTime  string  `json:"start_time"`
 	EndTime    string  `json:"end_time"`
 	Multiplier float64 `json:"multiplier"`
+	// 绝对价（与基础价同单位）：任一字段非空时直接替换该分项单价，
+	// 用于表达峰谷不同价，而不是简单的倍数关系。
+	InputPrice      *float64 `json:"input_price" binding:"omitempty,min=0"`
+	OutputPrice     *float64 `json:"output_price" binding:"omitempty,min=0"`
+	CacheWritePrice *float64 `json:"cache_write_price" binding:"omitempty,min=0"`
+	CacheReadPrice  *float64 `json:"cache_read_price" binding:"omitempty,min=0"`
 }
 
 type pricingIntervalRequest struct {
@@ -148,18 +158,24 @@ type channelModelPricingResponse struct {
 	PerRequestPrice            *float64                    `json:"per_request_price"`
 	Intervals                  []pricingIntervalResponse   `json:"intervals"`
 	TimePricing                *channelTimePricingResponse `json:"time_pricing"`
+	Currency                   string                      `json:"currency,omitempty"`
 }
 
 type channelTimePricingResponse struct {
 	Timezone     string                             `json:"timezone"`
 	WeekdaysOnly bool                               `json:"weekdays_only"`
+	Holidays     []string                           `json:"holidays,omitempty"`
 	Periods      []channelTimePricingPeriodResponse `json:"periods"`
 }
 
 type channelTimePricingPeriodResponse struct {
-	StartTime  string  `json:"start_time"`
-	EndTime    string  `json:"end_time"`
-	Multiplier float64 `json:"multiplier"`
+	StartTime       string   `json:"start_time"`
+	EndTime         string   `json:"end_time"`
+	Multiplier      float64  `json:"multiplier"`
+	InputPrice      *float64 `json:"input_price,omitempty"`
+	OutputPrice     *float64 `json:"output_price,omitempty"`
+	CacheWritePrice *float64 `json:"cache_write_price,omitempty"`
+	CacheReadPrice  *float64 `json:"cache_read_price,omitempty"`
 }
 
 type pricingIntervalResponse struct {
@@ -278,6 +294,7 @@ func pricingToResponse(p *service.ChannelModelPricing) channelModelPricingRespon
 		PerRequestPrice:            p.PerRequestPrice,
 		Intervals:                  intervals,
 		TimePricing:                timePricingToResponse(p.TimePricing),
+		Currency:                   p.Currency,
 	}
 }
 
@@ -288,14 +305,19 @@ func timePricingToResponse(value *service.ChannelTimePricing) *channelTimePricin
 	periods := make([]channelTimePricingPeriodResponse, 0, len(value.Periods))
 	for _, period := range value.Periods {
 		periods = append(periods, channelTimePricingPeriodResponse{
-			StartTime:  period.StartTime,
-			EndTime:    period.EndTime,
-			Multiplier: period.Multiplier,
+			StartTime:       period.StartTime,
+			EndTime:         period.EndTime,
+			Multiplier:      period.Multiplier,
+			InputPrice:      period.InputPrice,
+			OutputPrice:     period.OutputPrice,
+			CacheWritePrice: period.CacheWritePrice,
+			CacheReadPrice:  period.CacheReadPrice,
 		})
 	}
 	return &channelTimePricingResponse{
 		Timezone:     value.Timezone,
 		WeekdaysOnly: value.WeekdaysOnly,
+		Holidays:     value.Holidays,
 		Periods:      periods,
 	}
 }
@@ -376,6 +398,7 @@ func pricingRequestToService(reqs []channelModelPricingRequest, allowChannelMult
 			PerRequestPrice:            r.PerRequestPrice,
 			Intervals:                  intervals,
 			TimePricing:                timePricingRequestToService(r.TimePricing),
+			Currency:                   strings.ToUpper(strings.TrimSpace(r.Currency)),
 		})
 	}
 	return result
@@ -388,14 +411,19 @@ func timePricingRequestToService(value *channelTimePricingRequest) *service.Chan
 	periods := make([]service.ChannelTimePricingPeriod, 0, len(value.Periods))
 	for _, period := range value.Periods {
 		periods = append(periods, service.ChannelTimePricingPeriod{
-			StartTime:  period.StartTime,
-			EndTime:    period.EndTime,
-			Multiplier: period.Multiplier,
+			StartTime:       period.StartTime,
+			EndTime:         period.EndTime,
+			Multiplier:      period.Multiplier,
+			InputPrice:      period.InputPrice,
+			OutputPrice:     period.OutputPrice,
+			CacheWritePrice: period.CacheWritePrice,
+			CacheReadPrice:  period.CacheReadPrice,
 		})
 	}
 	return &service.ChannelTimePricing{
 		Timezone:     value.Timezone,
 		WeekdaysOnly: value.WeekdaysOnly,
+		Holidays:     value.Holidays,
 		Periods:      periods,
 	}
 }

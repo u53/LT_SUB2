@@ -54,6 +54,7 @@ describe('TimePricingSection', () => {
     expect(wrapper.emitted('update:modelValue')?.[0]?.[0]).toEqual({
       timezone: 'Asia/Shanghai',
       weekdays_only: false,
+      holidays: [],
       periods: [{ start_time: '', end_time: '', multiplier: '1.00' }],
     })
     expect(value.periods).toHaveLength(0)
@@ -200,7 +201,9 @@ describe('TimePricingSection', () => {
     })
 
     const ids = wrapper.findAll('input').map(input => input.attributes('id'))
-    expect(ids).toHaveLength(6)
+    // 每个实例：开始时间 + 结束时间 + 倍率 + 4 个绝对价 = 7 个输入框。
+    expect(ids).toHaveLength(14)
+    expect(ids.every(id => typeof id === 'string' && id.length > 0)).toBe(true)
     expect(new Set(ids).size).toBe(ids.length)
   })
 })

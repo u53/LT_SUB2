@@ -111,7 +111,47 @@
         >
           <Icon name="trash" size="sm" />
         </button>
+
+        <!-- 绝对价（可选）：填写后该分项直接按此价计费，忽略倍率 -->
+        <div class="col-span-full grid grid-cols-1 gap-2 rounded bg-gray-50 p-2 sm:grid-cols-4 dark:bg-dark-700/40">
+          <div
+            v-for="priceField in absolutePriceFields"
+            :key="priceField.key"
+            class="min-w-0"
+          >
+            <label :for="`${inputIdPrefix}-${priceField.key}-${index}`" class="block text-xs text-gray-400">
+              {{ t(priceField.labelKey) }}
+            </label>
+            <input
+              :id="`${inputIdPrefix}-${priceField.key}-${index}`"
+              :value="period[priceField.key] ?? ''"
+              type="number"
+              min="0"
+              step="any"
+              class="input mt-1 w-full text-sm"
+              :placeholder="t('admin.channels.form.absolutePricePlaceholder')"
+              @input="updatePeriod(index, priceField.key, ($event.target as HTMLInputElement).value)"
+            />
+          </div>
+        </div>
       </div>
+    </div>
+
+    <!-- 节假日：命中当日不套用任何时段，直接按基础价 -->
+    <div class="mt-3">
+      <label class="block text-xs text-gray-400">
+        {{ t('admin.channels.form.timePricingHolidays') }}
+      </label>
+      <textarea
+        :value="holidaysText"
+        rows="2"
+        class="input mt-1 w-full text-sm"
+        :placeholder="t('admin.channels.form.timePricingHolidaysPlaceholder')"
+        @input="updateHolidays(($event.target as HTMLTextAreaElement).value)"
+      />
+      <p class="mt-1 text-xs text-gray-400">
+        {{ t('admin.channels.form.timePricingHolidaysHint') }}
+      </p>
     </div>
   </section>
 </template>
@@ -151,6 +191,24 @@ function updateTimezone(value: string | number | boolean | null) {
 
 function updateDayScope(value: string | number | boolean | null) {
   emit('update:modelValue', { ...props.modelValue, weekdays_only: value === true })
+}
+
+// absolutePriceFields 是时段内可选绝对价的字段清单，用于峰谷不同价的场景。
+const absolutePriceFields = [
+  { key: 'input_price' as const, labelKey: 'admin.channels.form.inputPrice' },
+  { key: 'output_price' as const, labelKey: 'admin.channels.form.outputPrice' },
+  { key: 'cache_write_price' as const, labelKey: 'admin.channels.form.cacheWritePrice' },
+  { key: 'cache_read_price' as const, labelKey: 'admin.channels.form.cacheReadPrice' },
+]
+
+const holidaysText = computed(() => (props.modelValue.holidays || []).join('\n'))
+
+function updateHolidays(value: string) {
+  const holidays = value
+    .split(/[\s,，]+/)
+    .map(item => item.trim())
+    .filter(Boolean)
+  emit('update:modelValue', { ...props.modelValue, holidays })
 }
 
 function normalizeClockTime(value: string): string {

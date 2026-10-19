@@ -25,6 +25,9 @@ const (
 	RunModeSimple   = "simple"
 )
 
+// CurrencyUSD 是价格目录与海外模型官网价的计价币种。
+const CurrencyUSD = "USD"
+
 // 使用量记录队列溢出策略
 const (
 	UsageRecordOverflowPolicyDrop   = "drop"
@@ -931,6 +934,84 @@ type BillingConfig struct {
 	UserPlatformQuotaSentinelTTLSeconds int `mapstructure:"user_platform_quota_sentinel_ttl_seconds"`
 	// InflightReservation 余额模式在途请求预留（Redis），防止并发请求在预检时看到同一份余额而集体透支。
 	InflightReservation InflightReservationConfig `mapstructure:"inflight_reservation"`
+
+	// AccountingCurrency 是记账币种（ISO 4217），余额、用量成本、配额都以此为单位。
+	// 空值按 USD 处理，保持历史部署行为不变。
+	AccountingCurrency string `mapstructure:"accounting_currency"`
+	// USDToAccountingRate 是 1 USD 折合记账币种的汇率，仅在记账币种非 USD 时生效。
+	// 用于把以美元官网价录入的海外模型价格折成记账币种；国产模型直接按
+	// 记账币种录入，不经过这里。<=0 视为未配置，此时非 USD 记账会拒绝启动。
+	USDToAccountingRate float64 `mapstructure:"usd_to_accounting_rate"`
+	// CurrencyRates 是额外的币种折算表（1 单位源币种 = N 单位记账币种），
+	// 键为 ISO 4217 代码。USD 也可在此覆盖 usd_to_accounting_rate。
+	CurrencyRates map[string]float64 `mapstructure:"currency_rates"`
+}
+
+// AccountingCurrencyOrDefault 返回规范化的记账币种；空值按 USD 处理。
+func (c BillingConfig) AccountingCurrencyOrDefault() string {
+	currency := strings.ToUpper(strings.TrimSpace(c.AccountingCurrency))
+	if currency == "" {
+		return CurrencyUSD
+	}
+	return currency
+}
+
+// RateToAccounting 返回 1 单位 from 币种折合记账币种的系数。
+// 同币种恒为 1；USD 优先取 currency_rates 覆盖，其次 usd_to_accounting_rate。
+func (c BillingConfig) RateToAccounting(from string) (float64, bool) {
+	from = strings.ToUpper(strings.TrimSpace(from))
+	accounting := c.AccountingCurrencyOrDefault()
+	if from == "" || from == accounting {
+		return 1, true
+	}
+	if rate, ok := c.CurrencyRates[from]; ok {
+		if rate > 0 && !math.IsNaN(rate) && !math.IsInf(rate, 0) {
+			return rate, true
+		}
+		return 0, false
+	}
+	if from == CurrencyUSD && c.USDToAccountingRate > 0 && !math.IsNaN(c.USDToAccountingRate) && !math.IsInf(c.USDToAccountingRate, 0) {
+		return c.USDToAccountingRate, true
+	}
+	return 0, false
+}
+
+// validateAccountingCurrency 校验记账币种与汇率配置。
+// 非 USD 记账必须能为 USD 提供汇率，否则海外模型（以美元官网价录入）无法折算，
+// 启动即拒绝，避免运行期静默按 1:1 少计费。
+func (c BillingConfig) validateAccountingCurrency() error {
+	currency := c.AccountingCurrencyOrDefault()
+	if !validISOCurrencyCode(currency) {
+		return fmt.Errorf("billing.accounting_currency must be an ISO 4217 code, got %q", c.AccountingCurrency)
+	}
+	for code, rate := range c.CurrencyRates {
+		if !validISOCurrencyCode(code) {
+			return fmt.Errorf("billing.currency_rates has invalid currency code %q", code)
+		}
+		if rate <= 0 || math.IsNaN(rate) || math.IsInf(rate, 0) {
+			return fmt.Errorf("billing.currency_rates[%s] must be a positive number", code)
+		}
+	}
+	if currency == CurrencyUSD {
+		return nil
+	}
+	if _, ok := c.RateToAccounting(CurrencyUSD); !ok {
+		return fmt.Errorf("billing.accounting_currency=%s requires billing.usd_to_accounting_rate or billing.currency_rates.USD", currency)
+	}
+	return nil
+}
+
+// validISOCurrencyCode 判断是否为三位字母的 ISO 4217 代码。
+func validISOCurrencyCode(code string) bool {
+	if len(code) != 3 {
+		return false
+	}
+	for _, r := range code {
+		if r < 'A' || r > 'Z' {
+			return false
+		}
+	}
+	return true
 }
 
 // InflightReservationConfig 余额模式在途预留配置。
@@ -2379,6 +2460,9 @@ func setDefaults() {
 	viper.SetDefault("billing.inflight_reservation.max_input_tokens", 200000)
 	viper.SetDefault("billing.inflight_reservation.max_reservation_usd", 0)
 	viper.SetDefault("billing.inflight_reservation.fail_closed_on_unpriced", false)
+	// 记账币种默认 USD，保持既有部署行为；改为 CNY 时需同时配置汇率。
+	viper.SetDefault("billing.accounting_currency", "USD")
+	viper.SetDefault("billing.usd_to_accounting_rate", 0.0)
 
 	// Turnstile
 	viper.SetDefault("turnstile.required", false)
@@ -3405,6 +3489,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Billing.MinimumBalanceReserve < 0 {
 		return fmt.Errorf("billing.minimum_balance_reserve must be non-negative")
+	}
+	if err := c.Billing.validateAccountingCurrency(); err != nil {
+		return err
 	}
 	if c.Billing.InflightReservation.TTLSeconds < 0 || c.Billing.InflightReservation.DefaultMaxTokens < 0 ||
 		c.Billing.InflightReservation.MaxOutputTokens < 0 || c.Billing.InflightReservation.MaxInputTokens < 0 ||

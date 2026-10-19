@@ -1269,6 +1269,23 @@ billing:
     # 无法为请求定价（计费模型无基础/分组/渠道定价）时拒绝请求；默认 false 为放行不预留（节流告警日志）
     fail_closed_on_unpriced: false
 
+  # Accounting currency for balances, usage costs and quotas (ISO 4217).
+  # Empty or USD keeps the historical behaviour. Set to CNY to bill in RMB:
+  # domestic models can then be priced with their official CNY list price
+  # (set the pricing entry's currency to CNY), while overseas models keep their
+  # official USD price and are converted with usd_to_accounting_rate.
+  # 记账币种（ISO 4217）。留空或 USD 保持历史行为；改为 CNY 即按人民币记账：
+  # 国产模型可按官网人民币价录入（定价条目币种填 CNY），海外模型仍按美元官网价
+  # 录入，再用 usd_to_accounting_rate 折算。非 USD 记账必须提供 USD 汇率，否则拒绝启动。
+  accounting_currency: USD
+  # 1 USD = N units of accounting_currency. Only used when accounting_currency != USD.
+  # 1 美元折合记账币种的汇率；仅当记账币种不是 USD 时生效。
+  usd_to_accounting_rate: 0
+  # Extra per-currency conversion rates (1 unit of the key currency = N accounting units).
+  # USD may also be listed here to override usd_to_accounting_rate.
+  # 额外币种折算表（1 单位源币种 = N 单位记账币种）；USD 写在这里可覆盖上面的汇率。
+  currency_rates: {}
+
 # =============================================================================
 # Turnstile Configuration
 # Turnstile 人机验证配置

@@ -30,11 +30,18 @@ export interface ChannelTimePricingPeriod {
   start_time: string
   end_time: string
   multiplier: number
+  // 绝对价（与基础价同单位）：任一非空时直接替换该分项单价，用于峰谷不同价。
+  input_price?: number | null
+  output_price?: number | null
+  cache_write_price?: number | null
+  cache_read_price?: number | null
 }
 
 export interface ChannelTimePricing {
   timezone: string
   weekdays_only?: boolean
+  // 额外视为空闲时段的日期（YYYY-MM-DD），用于法定节假日。
+  holidays?: string[]
   periods: ChannelTimePricingPeriod[]
 }
 
@@ -56,6 +63,8 @@ export interface ChannelModelPricing {
   per_request_price: number | null
   intervals: PricingInterval[]
   time_pricing: ChannelTimePricing | null
+  // 价格录入币种（ISO 4217）；留空表示与记账币种相同。
+  currency?: string
 }
 
 export interface AccountStatsPricingRule {

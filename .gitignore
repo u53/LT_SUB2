@@ -106,6 +106,8 @@ backend/internal/web/dist/*
 
 # 后端运行时缓存数据
 backend/data/
+# 测试运行时写出的图片中转临时目录（service 层测试的副作用）
+backend/internal/service/data/
 
 # ===================
 # 本地配置文件（包含敏感信息）

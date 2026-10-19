@@ -1172,12 +1172,9 @@ func normalizeGroupModelPricing(platform string, pricing []ChannelModelPricing) 
 		out[i] = pricing[i].Clone()
 		out[i].ID = 0
 		out[i].ChannelID = 0
-		if out[i].TimePricing != nil && len(out[i].TimePricing.Periods) > 0 {
-			return nil, infraerrors.BadRequest(
-				"GROUP_MODEL_TIME_PRICING_UNSUPPORTED",
-				"group model pricing does not support time pricing",
-			)
-		}
+		// 分组逐模型定价支持时段定价（峰谷）：时段表跟随价格条目，
+		// 由 calculateTokenCost 统一应用，不再限制来源。
+		// 这样运营者为某个模型配置分组价后，仍可保留峰谷价档。
 		if strings.TrimSpace(out[i].Platform) == "" {
 			out[i].Platform = platform
 		}

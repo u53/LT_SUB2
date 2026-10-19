@@ -97,6 +97,19 @@
               class="mt-1"
             />
           </div>
+          <div class="w-28">
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400">
+              {{ t('admin.channels.form.currency') }}
+            </label>
+            <input
+              :value="entry.currency || ''"
+              @input="emitField('currency', ($event.target as HTMLInputElement).value.toUpperCase())"
+              type="text"
+              maxlength="3"
+              class="input mt-1 text-sm uppercase"
+              :placeholder="t('admin.channels.form.currencyPlaceholder')"
+            />
+          </div>
         </div>
 
         <!-- Token mode -->
@@ -104,10 +117,9 @@
           <!-- Default prices (fallback when no interval matches) -->
           <label class="mt-3 block text-xs font-medium text-gray-500 dark:text-gray-400">
             {{ t('admin.channels.form.defaultPrices') }}
-            <span class="ml-1 font-normal text-gray-400">$/MTok</span>
+            <span class="ml-1 font-normal text-gray-400">{{ priceUnitLabel }}</span>
           </label>
-          <div class="pricing-default-grid mt-1 grid gap-2">
-            <div>
+          <div class="pricing-default-grid mt-1 grid gap-2">            <div>
               <label class="text-xs text-gray-400">{{ t('admin.channels.form.inputPrice') }}</label>
               <input :value="entry.input_price" @input="emitField('input_price', ($event.target as HTMLInputElement).value)"
                 type="number" step="any" min="0" class="input mt-0.5 text-sm" :placeholder="t('admin.channels.form.pricePlaceholder')" />
@@ -330,6 +342,13 @@ const emit = defineEmits<{
   update: [entry: PricingFormEntry]
   remove: []
 }>()
+
+// priceUnitLabel 按条目币种显示价格单位，避免人民币官网价被标注成 $/MTok。
+const priceUnitLabel = computed(() => {
+  const currency = (props.entry.currency || '').toUpperCase()
+  if (!currency) return '$/MTok'
+  return `${currency}/MTok`
+})
 
 // Collapse state: entries with existing models default to collapsed
 const collapsed = ref(props.entry.models.length > 0)

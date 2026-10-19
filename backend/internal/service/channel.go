@@ -106,22 +106,39 @@ type ChannelModelPricing struct {
 	PerRequestPrice            *float64            `json:"per_request_price"`
 	Intervals                  []PricingInterval   `json:"intervals"`
 	TimePricing                *ChannelTimePricing `json:"time_pricing,omitempty"`
-	CreatedAt                  time.Time           `json:"created_at,omitempty"`
-	UpdatedAt                  time.Time           `json:"updated_at,omitempty"`
+	// Currency 是本条价格的录入币种（ISO 4217）。空值表示与记账币种相同。
+	// 国产模型可填 CNY 直接录入人民币官网价，无需人工换算。
+	Currency  string    `json:"currency,omitempty"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
 }
 
-// ChannelTimePricing 渠道模型定价的分时倍率配置。
+// ChannelTimePricing 渠道模型定价的分时配置。
+// Periods 命中时按 Multiplier 或绝对价调整单价，用于表达峰谷价档。
 type ChannelTimePricing struct {
 	Timezone     string                     `json:"timezone"`
 	WeekdaysOnly bool                       `json:"weekdays_only,omitempty"`
 	Periods      []ChannelTimePricingPeriod `json:"periods"`
+	// Holidays 是额外视为空闲时段的日期（YYYY-MM-DD，按 Timezone 解释）。
+	// 命中当日不套用任何 Period，直接按基础价计费。
+	// 用于表达「法定节假日全天低谷」这类上游口径。
+	Holidays []string `json:"holidays,omitempty"`
 }
 
-// ChannelTimePricingPeriod 是秒级的左闭右开分时倍率区间，并兼容历史 HH:mm 数据。
+// ChannelTimePricingPeriod 是秒级的左闭右开分时区间，并兼容历史 HH:mm 数据。
+//
+// 两种定价方式：
+//   - Multiplier 非 0：按倍率缩放当前单价（历史语义）；
+//   - 任一绝对价非 nil：该字段直接替换单价，优先级高于 Multiplier。
+//     用于「峰谷不同价」——上游给出两个独立价格而不是简单倍数时使用。
 type ChannelTimePricingPeriod struct {
-	StartTime  string  `json:"start_time"`
-	EndTime    string  `json:"end_time"`
-	Multiplier float64 `json:"multiplier"`
+	StartTime       string   `json:"start_time"`
+	EndTime         string   `json:"end_time"`
+	Multiplier      float64  `json:"multiplier"`
+	InputPrice      *float64 `json:"input_price,omitempty"`
+	OutputPrice     *float64 `json:"output_price,omitempty"`
+	CacheWritePrice *float64 `json:"cache_write_price,omitempty"`
+	CacheReadPrice  *float64 `json:"cache_read_price,omitempty"`
 }
 
 // PricingInterval 定价区间（token 区间 / 按次分层 / 图片分辨率分层）
@@ -228,6 +245,9 @@ func (p ChannelModelPricing) Clone() ChannelModelPricing {
 		}
 		if p.TimePricing.Periods != nil {
 			cp.TimePricing.Periods = append([]ChannelTimePricingPeriod(nil), p.TimePricing.Periods...)
+		}
+		if p.TimePricing.Holidays != nil {
+			cp.TimePricing.Holidays = append([]string(nil), p.TimePricing.Holidays...)
 		}
 	}
 	return cp

@@ -692,7 +692,33 @@ func validatePricingEntries(pricing []ChannelModelPricing) error {
 	if err := validateReasoningEffortMultipliers(pricing); err != nil {
 		return err
 	}
+	if err := validatePricingCurrency(pricing); err != nil {
+		return err
+	}
 	return validatePricingTimePricing(pricing)
+}
+
+// validatePricingCurrency 校验价格条目币种：留空表示与记账币种相同，
+// 非空必须是三位 ISO 4217 代码。缺汇率的币种不在此处拦截——汇率可随后
+// 在配置里补充，计费时会告警并保留原价，而不是让管理端无法保存。
+func validatePricingCurrency(pricing []ChannelModelPricing) error {
+	for _, p := range pricing {
+		currency := strings.ToUpper(strings.TrimSpace(p.Currency))
+		if currency == "" {
+			continue
+		}
+		if len(currency) != 3 {
+			return infraerrors.BadRequest("INVALID_PRICING_CURRENCY",
+				fmt.Sprintf("currency must be a 3-letter ISO 4217 code, got %q", p.Currency))
+		}
+		for _, r := range currency {
+			if r < 'A' || r > 'Z' {
+				return infraerrors.BadRequest("INVALID_PRICING_CURRENCY",
+					fmt.Sprintf("currency must be a 3-letter ISO 4217 code, got %q", p.Currency))
+			}
+		}
+	}
+	return nil
 }
 
 func validateReasoningEffortMultipliers(pricing []ChannelModelPricing) error {

@@ -174,8 +174,44 @@ describe('validateIntervals', () => {
 describe('time pricing', () => {
   it('uses a disabled Shanghai default', () => {
     const form = createDefaultTimePricingForm()
-    expect(form).toEqual({ timezone: 'Asia/Shanghai', periods: [], weekdays_only: false })
+    expect(form).toEqual({ timezone: 'Asia/Shanghai', periods: [], weekdays_only: false, holidays: [] })
     expect(formTimePricingToAPI(form)).toBeNull()
+  })
+
+  it('round-trips absolute prices and holidays', () => {
+    const form = apiTimePricingToForm({
+      timezone: 'Asia/Shanghai',
+      holidays: ['2026-10-01'],
+      periods: [{ start_time: '09:00:00', end_time: '12:00:00', multiplier: 1, input_price: 2e-6, output_price: 8e-6 }],
+    })
+    expect(form.holidays).toEqual(['2026-10-01'])
+    expect(form.periods[0].input_price).toBe(2e-6)
+
+    const api = formTimePricingToAPI(form)
+    expect(api?.holidays).toEqual(['2026-10-01'])
+    expect(api?.periods[0]).toMatchObject({ input_price: 2e-6, output_price: 8e-6 })
+    // 未填写的绝对价不得出现在请求体里，避免把基础价覆盖成 0。
+    expect(api?.periods[0]).not.toHaveProperty('cache_write_price')
+  })
+
+  it('accepts absolute prices without a valid multiplier', () => {
+    const form = {
+      timezone: 'Asia/Shanghai',
+      weekdays_only: true,
+      holidays: [],
+      periods: [{ start_time: '09:00:00', end_time: '12:00:00', multiplier: '0', input_price: 1 }],
+    }
+    expect(validateTimePricing(form, (key: string) => key)).toBeNull()
+  })
+
+  it('rejects malformed holiday dates', () => {
+    const form = {
+      timezone: 'Asia/Shanghai',
+      weekdays_only: true,
+      holidays: ['2026/10/01'],
+      periods: [{ start_time: '09:00:00', end_time: '12:00:00', multiplier: '2.00' }],
+    }
+    expect(validateTimePricing(form, (key: string) => key)).toBe('admin.channels.timePricingValidation.holiday')
   })
 
   it('defaults missing API day scope to every day', () => {
@@ -196,6 +232,10 @@ describe('time pricing', () => {
       start_time: '09:00:00',
       end_time: '12:00:00',
       multiplier: '2.00',
+      input_price: null,
+      output_price: null,
+      cache_write_price: null,
+      cache_read_price: null,
     })
     expect(formTimePricingToAPI(form)).toEqual({
       timezone: 'Asia/Shanghai',
