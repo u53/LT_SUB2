@@ -98,7 +98,9 @@ type Group struct {
 	Description    string  `json:"description"`
 	Platform       string  `json:"platform"`
 	RateMultiplier float64 `json:"rate_multiplier"`
-	IsExclusive    bool    `json:"is_exclusive"`
+	// 是否允许代理分销；关闭后该分组不产生佣金。
+	AgentDistributionEnabled bool `json:"agent_distribution_enabled"`
+	IsExclusive              bool `json:"is_exclusive"`
 	Status         string  `json:"status"`
 
 	// I18n 名称与描述的各语言译文。只有管理端输出；用户侧接口经 Localized 把

@@ -48,6 +48,7 @@ type AdminHandlers struct {
 	PromptAudit            *securityaudit.PromptAdminHandler
 	Payment                *admin.PaymentHandler
 	Affiliate              *admin.AffiliateHandler
+	Agent                  *admin.AgentHandler
 	Compliance             *admin.ComplianceHandler
 	AuditLog               *admin.AuditLogHandler
 }
@@ -76,6 +77,7 @@ type Handlers struct {
 	PelicanShowcase  *PelicanShowcaseHandler
 	SupportTicket    *SupportTicketHandler
 	ModelPlaza       *ModelPlazaHandler
+	Agent            *AgentHandler
 	AsyncImage       *AsyncImageHandler
 	BatchImage       *BatchImageHandler
 }

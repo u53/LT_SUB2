@@ -110,6 +110,9 @@ func (s *BillingService) ResolveContextPricingSchedule(ctx context.Context, reso
 		RateMultiplier: 1,
 		Resolver:       resolver,
 		Resolved:       resolved,
+		// 这是展示/探测路径：阶梯表表示标准时段价，不套用当前时刻的分时倍率，
+		// 否则同一份配置在不同时间点查询会给出不同单价。
+		DisableTimePricing: true,
 	}
 	probe := func(tokens UsageTokens) (*CostBreakdown, error) {
 		r := req

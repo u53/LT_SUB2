@@ -266,6 +266,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/agent',
+    name: 'AgentCenter',
+    component: () => import('@/views/user/AgentCenterView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Agent Center',
+      titleKey: 'agentCenter.title',
+      descriptionKey: 'agentCenter.description'
+    }
+  },
+  {
     path: '/support-tickets',
     name: 'SupportTickets',
     component: () => import('@/views/user/SupportTicketsView.vue'),
@@ -735,6 +747,46 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/admin/affiliates',
     redirect: '/admin/affiliates/invites'
+  },
+  {
+    path: '/admin/agents',
+    redirect: '/admin/agents/list'
+  },
+  {
+    path: '/admin/agents/list',
+    name: 'AdminAgentList',
+    component: () => import('@/views/admin/agents/AgentListView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Agent Management',
+      titleKey: 'agents.title',
+      descriptionKey: 'agents.description'
+    }
+  },
+  {
+    path: '/admin/agents/commissions',
+    name: 'AdminAgentCommissions',
+    component: () => import('@/views/admin/agents/AgentCommissionView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Agent Commission Ledger',
+      titleKey: 'agents.commissions.title',
+      descriptionKey: 'agents.commissions.description'
+    }
+  },
+  {
+    path: '/admin/agents/withdrawals',
+    name: 'AdminAgentWithdrawals',
+    component: () => import('@/views/admin/agents/AgentWithdrawalView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Agent Withdrawal Records',
+      titleKey: 'agents.withdrawals.title',
+      descriptionKey: 'agents.withdrawals.description'
+    }
   },
   {
     path: '/admin/affiliates/invites',

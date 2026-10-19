@@ -8,6 +8,24 @@
       </div>
 
       <template v-else-if="detail">
+        <!-- 代理提示：引导到代理中心管理下级折扣与佣金 -->
+        <div
+          v-if="authStore.isAgent"
+          class="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/40 dark:bg-emerald-900/20 sm:flex-row sm:items-center sm:justify-between"
+          data-testid="agent-notice"
+        >
+          <div class="flex items-start gap-3">
+            <Icon name="trendingUp" size="md" class="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <div>
+              <p class="text-sm font-medium text-emerald-900 dark:text-emerald-200">{{ t('agentNotice.title') }}</p>
+              <p class="mt-1 text-sm text-emerald-800 dark:text-emerald-300">{{ t('agentNotice.description') }}</p>
+            </div>
+          </div>
+          <router-link to="/agent" class="btn btn-primary shrink-0">
+            {{ t('agentNotice.action') }}
+          </router-link>
+        </div>
+
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div class="card p-5">
             <p class="flex items-center gap-1.5 text-sm text-gray-500 dark:text-dark-400">

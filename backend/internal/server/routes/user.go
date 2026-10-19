@@ -40,6 +40,21 @@ func RegisterUserRoutes(
 			user.GET("/api-keys/:id/usage/daily", panelRateLimiter.Heavy(), h.Usage.GetMyAPIKeyDailyUsage)
 			user.GET("/platform-quotas", h.User.GetMyPlatformQuotas)
 
+			// 代理自助：只有 agent 角色可访问。角色校验放在 handler 内做归属校验之前，
+			// 因为普通用户即使知道路径也不应看到佣金账户与下级列表。
+			if h.Agent != nil {
+				agent := user.Group("/agent")
+				agent.Use(requireAgentRole())
+				{
+					agent.GET("/profile", h.Agent.Profile)
+					agent.GET("/children", h.Agent.Children)
+					agent.PUT("/children/:id/rate", h.Agent.SetChildRate)
+					agent.GET("/commissions", h.Agent.Commissions)
+					agent.POST("/withdraw", h.Agent.Withdraw)
+					agent.GET("/withdrawals", h.Agent.Withdrawals)
+				}
+			}
+
 			// 通知邮箱管理
 			notifyEmail := user.Group("/notify-email")
 			{
@@ -186,5 +201,26 @@ func RegisterUserRoutes(
 			monitorV3.GET("/status", h.ChannelMonitorV3.Status)
 			monitorV3.GET("/incidents", h.ChannelMonitorV3.Incidents)
 		}
+	}
+}
+
+// requireAgentRole 只允许 agent（以及管理员，便于排查）访问代理自助接口。
+//
+// 放在路由层而不是 handler 内：佣金账户与下级列表属于代理私有数据，
+// 普通用户即使猜到路径也不应进入业务逻辑。
+func requireAgentRole() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		subject, ok := middleware.GetAuthSubjectFromContext(c)
+		if !ok || subject.UserID <= 0 {
+			c.AbortWithStatusJSON(401, gin.H{"error": "unauthorized"})
+			return
+		}
+		role, _ := c.Get(string(middleware.ContextKeyUserRole))
+		roleStr, _ := role.(string)
+		if roleStr != service.RoleAgent && roleStr != service.RoleAdmin {
+			c.AbortWithStatusJSON(403, gin.H{"error": "agent access required"})
+			return
+		}
+		c.Next()
 	}
 }

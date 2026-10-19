@@ -644,7 +644,45 @@ export default {
       roles: {
         observer: '观察者',
         admin: '管理员',
+        agent: '代理',
         user: '用户'
+      },
+      // 代理配置弹窗
+      agentConfig: {
+        title: '代理配置',
+        menuItem: '代理配置',
+        hint: '为 {email} 配置分销折扣、佣金冻结期与按分组成本倍率',
+        notAgentTitle: '该用户当前不是代理',
+        notAgentHint: '代理可以发展下级并按分组成本倍率获得佣金差价. 设为代理后需重新配置其下级折扣.',
+        promote: '设为代理',
+        promoted: '已将该用户设为代理',
+        promoteFailed: '设为代理失败',
+        enabled: '启用代理分销',
+        enabledHint: '关闭后该代理无法发展新下级, 已产生的佣金不受影响',
+        defaultRate: '默认下级折扣倍率',
+        defaultRateHint: '下级拿货价 = 分组成本倍率 × 该倍率, 取值 0.001 到 1',
+        useGroupPrice: '留空按分组公开价计费',
+        account: {
+          available: '可提现佣金',
+          frozen: '冻结中佣金',
+          total: '累计佣金'
+        },
+        frozenHours: '佣金冻结期（小时）',
+        frozenHoursHint: '佣金在该时长后可提现, 0 表示不冻结',
+        notes: '备注',
+        notesPlaceholder: '代理相关备注, 仅管理员可见',
+        groupCosts: {
+          title: '按分组成本折扣',
+          description: '为每个启用中的分组单独设置代理拿货成本倍率, 留空表示沿用分组默认倍率',
+          empty: '暂无启用中的分组',
+          group: '分组',
+          groupRate: '分组默认倍率',
+          costRate: '成本倍率',
+          useGroupRate: '留空使用默认'
+        },
+        loadFailed: '读取代理配置失败, 保存可能会覆盖原有配置',
+        saved: '代理配置已保存',
+        saveFailed: '保存代理配置失败'
       },
       form: {
         emailLabel: '邮箱',
@@ -1056,6 +1094,22 @@ export default {
       nameRequired: '请输入分组名称',
       rateMultipliers: '专属倍率',
       rateMultipliersTitle: '分组专属倍率管理',
+      // 分组代理成本弹窗
+      agentCosts: '代理成本',
+      agentCostsTitle: '分组代理成本倍率',
+      agentCostsDescription: '为指定代理设置其在本分组的拿货成本倍率, 留空表示沿用分组默认倍率',
+      agentCostsSelectAgent: '选择代理',
+      agentCostsSelectPlaceholder: '请选择代理',
+      agentCostsNoAgents: '暂无代理用户',
+      agentCostsNoAgentsHint: '请先在用户管理中把用户设为代理',
+      agentCostsGroupRate: '分组默认倍率',
+      agentCostsCostRate: '代理成本倍率',
+      agentCostsUseDefault: '留空使用默认',
+      agentCostsSaved: '代理成本倍率已保存',
+      agentCostsSaveFailed: '保存代理成本倍率失败',
+      agentCostsLoadFailed: '读取代理成本倍率失败',
+      agentDistribution: '允许代理分销',
+      agentDistributionHint: '关闭后代理无法把该分组作为下级拿货分组',
       addUserRate: '添加用户专属倍率',
       rpmOverrides: '专属 RPM',
       rpmOverridesTitle: '分组专属 RPM 管理',
@@ -1360,6 +1414,20 @@ export default {
         geminiImage: 'Gemini Image',
         hint: '至少选择一个模型系列'
       }
+    },
+
+    // 代理佣金设置区块（独立命名空间，避免与 admin/settings.ts 的 settings 键冲突）
+    agentCommission: {
+      title: '代理佣金',
+      description: '代理按分组成本倍率赚取差价，可配置计佣门槛、佣金冻结期与提现最低额。默认关闭。',
+      enabled: '启用代理佣金',
+      enabledHint: '关闭后代理不再产生新佣金，已入账佣金不受影响',
+      minCommission: '最低计佣阈值',
+      minCommissionHint: '单笔佣金低于该金额时丢弃，避免产生大量零碎入账',
+      frozenHours: '佣金冻结期（小时）',
+      frozenHoursDesc: '佣金在该时长后可提现，0 表示不冻结',
+      minWithdraw: '提现最低额',
+      minWithdrawHint: '代理单次提现金额下限，0 表示不限制'
     },
 
     // Available Channels (aggregated read-only view)

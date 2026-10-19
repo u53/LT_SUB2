@@ -42,6 +42,17 @@ type UsageBillingCommand struct {
 	APIKeyQuotaCost     float64
 	APIKeyRateLimitCost float64
 	AccountQuotaCost    float64
+
+	// 代理佣金（首期仅一级代理）。无上级代理时全部为零值，仓储层据此跳过。
+	// GroupID 单独记录，避免从 APIKey 反查（佣金流水需保留当时的计费分组）。
+	AgentUserID           int64
+	GroupID               *int64
+	CommissionAmount      float64
+	CommissionBaseCost    float64 // 倍率前的 TotalCost
+	CommissionChildRate   float64 // 下级售价倍率
+	CommissionAgentCostRate float64 // 代理成本倍率
+	CommissionChildPaid   float64
+	CommissionAgentCost   float64
 }
 
 func (c *UsageBillingCommand) Normalize() {
@@ -86,6 +97,11 @@ func (c *UsageBillingCommand) quantizeMonetaryFields() {
 	c.APIKeyQuotaCost = QuantizeUsageBillingAmount(c.APIKeyQuotaCost)
 	c.APIKeyRateLimitCost = QuantizeUsageBillingAmount(c.APIKeyRateLimitCost)
 	c.AccountQuotaCost = QuantizeUsageBillingAmount(c.AccountQuotaCost)
+	// 佣金三金额必须与 CalculateCommission 的量化结果一致：那三个值已满足
+	// child_paid - agent_cost == commission，再量化一次是幂等的，不会破坏恒等关系。
+	c.CommissionAmount = QuantizeUsageBillingAmount(c.CommissionAmount)
+	c.CommissionChildPaid = QuantizeUsageBillingAmount(c.CommissionChildPaid)
+	c.CommissionAgentCost = QuantizeUsageBillingAmount(c.CommissionAgentCost)
 }
 
 // QuantizeUsageBillingAmount 把金额舍入到 UsageBillingMonetaryScale 位小数，
@@ -129,6 +145,11 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		c.APIKeyRateLimitCost,
 		c.AccountQuotaCost,
 	)
+	// 佣金字段参与指纹：同一 request_id 重放时若佣金口径变了（如代理改了成本折扣），
+	// 应按 fingerprint conflict 暴露出来，而不是静默沿用旧结果。
+	if c.AgentUserID > 0 || c.CommissionAmount > 0 {
+		raw += fmt.Sprintf("|%d|%0.10f|%0.10f", c.AgentUserID, c.CommissionAmount, c.CommissionBaseCost)
+	}
 	if payloadHash := strings.TrimSpace(c.RequestPayloadHash); payloadHash != "" {
 		raw += "|" + payloadHash
 	}

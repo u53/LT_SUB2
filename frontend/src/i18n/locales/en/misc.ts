@@ -87,6 +87,13 @@ export default {
     copyCodeFailed: 'Failed'
   },
 
+  // Agent entry hints shown on user-facing pages
+  agentNotice: {
+    title: 'You are an agent',
+    description: 'You are an agent. Manage downline discounts and commissions in the Agent Center.',
+    action: 'Go to Agent Center'
+  },
+
   // Announcements Page
   announcements: {
     title: 'Announcements',

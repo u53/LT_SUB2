@@ -157,6 +157,7 @@ func RegisterAdminRoutes(
 
 		// 邀请返利（专属用户管理）
 		registerAffiliateRoutes(admin, h)
+		registerAgentRoutes(admin, h)
 
 		// 操作审计日志
 		registerAuditLogRoutes(admin, h, stepUpAuth)
@@ -1018,6 +1019,24 @@ func registerAffiliateRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 			users.PUT("/:user_id", h.Admin.Affiliate.UpdateUserSettings)
 			users.DELETE("/:user_id", h.Admin.Affiliate.ClearUserSettings)
 		}
+	}
+}
+
+// registerAgentRoutes 注册代理佣金的管理端路由。
+//
+// /commissions 与 /withdrawals 必须注册在 /:id 之前，否则 gin 会把它们当成 id 参数。
+func registerAgentRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	agents := admin.Group("/agents")
+	{
+		agents.GET("", h.Admin.Agent.List)
+		agents.GET("/commissions", h.Admin.Agent.ListCommissions)
+		agents.GET("/withdrawals", h.Admin.Agent.ListWithdrawals)
+		agents.GET("/:id", h.Admin.Agent.Get)
+		agents.PUT("/:id", h.Admin.Agent.Update)
+		agents.GET("/:id/group-costs", h.Admin.Agent.GetGroupCosts)
+		agents.PUT("/:id/group-costs", h.Admin.Agent.ReplaceGroupCosts)
+		agents.GET("/:id/children", h.Admin.Agent.ListChildren)
+		agents.POST("/:id/withdraw", h.Admin.Agent.Withdraw)
 	}
 }
 

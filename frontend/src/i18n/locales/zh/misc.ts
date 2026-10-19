@@ -85,6 +85,13 @@ export default {
     copyCodeFailed: '失败'
   },
 
+  // Agent (代理分销) entry hints shown on user-facing pages
+  agentNotice: {
+    title: '你是代理',
+    description: '你是代理，请前往代理中心管理下级折扣与佣金。',
+    action: '前往代理中心'
+  },
+
   // Announcements Page
   announcements: {
     title: '公告',

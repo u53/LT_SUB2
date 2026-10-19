@@ -8123,6 +8123,85 @@
           </div>
         </div>
 
+        <!-- Agent commission (代理佣金) feature card -->
+        <div class="card">
+          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.agentCommission.title') }}
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.agentCommission.description') }}
+            </p>
+          </div>
+          <div class="space-y-5 p-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.agentCommission.enabled') }}
+                </label>
+                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.agentCommission.enabledHint') }}
+                </p>
+              </div>
+              <Toggle v-model="form.agent_commission_enabled" data-testid="agent-commission-enabled" />
+            </div>
+
+            <div v-if="form.agent_commission_enabled" class="space-y-6">
+              <div>
+                <label class="input-label">
+                  {{ t('admin.agentCommission.minCommission') }}
+                </label>
+                <input
+                  v-model.number="form.agent_min_commission"
+                  type="number"
+                  step="0.00000001"
+                  min="0"
+                  class="input"
+                  data-testid="agent-min-commission"
+                />
+                <p class="mt-1 text-xs text-gray-400">
+                  {{ t('admin.agentCommission.minCommissionHint') }}
+                </p>
+              </div>
+
+              <div>
+                <label class="input-label">
+                  {{ t('admin.agentCommission.frozenHours') }}
+                </label>
+                <input
+                  v-model.number="form.agent_commission_frozen_hours"
+                  type="number"
+                  step="1"
+                  min="0"
+                  max="720"
+                  class="input"
+                  data-testid="agent-commission-frozen-hours"
+                />
+                <p class="mt-1 text-xs text-gray-400">
+                  {{ t('admin.agentCommission.frozenHoursDesc') }}
+                </p>
+              </div>
+
+              <div>
+                <label class="input-label">
+                  {{ t('admin.agentCommission.minWithdraw') }}
+                </label>
+                <input
+                  v-model.number="form.agent_min_withdraw"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  class="input"
+                  data-testid="agent-min-withdraw"
+                />
+                <p class="mt-1 text-xs text-gray-400">
+                  {{ t('admin.agentCommission.minWithdrawHint') }}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Affiliate add/edit modal -->
         <div
           v-if="affiliateModal.open"
@@ -10141,6 +10220,12 @@ type SettingsForm = Omit<
   default_platform_quotas: DefaultPlatformQuotasMap;
   account_scheduling_thresholds: ReturnType<typeof normalizeAccountSchedulingThresholdsMap>;
   prism_browser_api_key: string;
+  // 代理佣金设置：SystemSettings 尚未声明这些字段，先在表单类型上本地声明，
+  // 保证 save/load 的键与后端 setting key 对齐（agent_commission_enabled 等）。
+  agent_commission_enabled: boolean;
+  agent_min_commission: number;
+  agent_commission_frozen_hours: number;
+  agent_min_withdraw: number;
 };
 
 const schedulingThresholdPlatforms = SCHEDULING_THRESHOLD_PLATFORMS;
@@ -10189,6 +10274,12 @@ const form = reactive<SettingsForm>({
   affiliate_rebate_duration_days: 0,
   affiliate_rebate_per_invitee_cap: 0,
   affiliate_admin_recharge_enabled: false,
+  // 代理佣金设置（后端 setting key：agent_commission_enabled / agent_min_commission /
+  // agent_commission_frozen_hours / agent_min_withdraw）
+  agent_commission_enabled: false,
+  agent_min_commission: 0,
+  agent_commission_frozen_hours: 0,
+  agent_min_withdraw: 0,
   default_concurrency: 1,
   default_subscriptions: [],
   force_email_on_third_party_signup: false,
@@ -12343,6 +12434,18 @@ async function saveSettings() {
     payload.account_scheduling_thresholds = sanitizeAccountSchedulingThresholdsMap(
       form.account_scheduling_thresholds,
     );
+    // 代理佣金设置：UpdateSettingsRequest 尚未声明这些字段，用 Object.assign 并入请求，
+    // 键名与后端 setting key 一致（agent_commission_enabled / agent_min_commission /
+    // agent_commission_frozen_hours / agent_min_withdraw）。
+    Object.assign(payload, {
+      agent_commission_enabled: form.agent_commission_enabled,
+      agent_min_commission: Math.max(0, Number(form.agent_min_commission) || 0),
+      agent_commission_frozen_hours: Math.max(
+        0,
+        Math.min(720, Math.trunc(Number(form.agent_commission_frozen_hours) || 0)),
+      ),
+      agent_min_withdraw: Math.max(0, Number(form.agent_min_withdraw) || 0),
+    });
     appendAuthSourceDefaultsToUpdateRequest(payload, authSourceDefaults);
 
     const updated = await settingsStepUp.run(() =>

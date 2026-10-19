@@ -87,6 +87,22 @@ type postUsageBillingParams struct {
 	// path that records only API-key 5h/1d/7d window usage. It must not trigger
 	// balance, subscription, account, platform, or lifetime-key-quota effects.
 	SimpleModeKeyRateLimitOnly bool
+
+	// 代理佣金：由 recordUsageCore / RecordUsage 按售价与成本倍率算好后填入。
+	// nil 表示该用户无上级代理，本次请求不计佣。
+	AgentCommission *AgentCommissionSnapshot
+}
+
+// AgentCommissionSnapshot 是一次请求的佣金快照，已通过 CalculateCommission 量化。
+type AgentCommissionSnapshot struct {
+	AgentUserID   int64
+	GroupID       *int64
+	BaseCost      float64
+	ChildRate     float64
+	AgentCostRate float64
+	ChildPaid     float64
+	AgentCost     float64
+	Commission    float64
 }
 
 var ErrSimpleModeKeyRateLimitBillingUnavailable = errors.New("simple mode api key rate-limit billing unavailable")
@@ -345,6 +361,19 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 	}
 	if p.shouldUpdateAccountQuota() {
 		cmd.AccountQuotaCost = p.Cost.TotalCost * p.AccountRateMultiplier
+	}
+
+	// 代理佣金：与扣费同事务写入，幂等键同为 (request_id, api_key_id)。
+	// 零佣金（售价不高于成本、或低于阈值）不填，仓储层自然跳过。
+	if snap := p.AgentCommission; snap != nil && snap.AgentUserID > 0 && snap.Commission > 0 {
+		cmd.AgentUserID = snap.AgentUserID
+		cmd.GroupID = snap.GroupID
+		cmd.CommissionAmount = snap.Commission
+		cmd.CommissionBaseCost = snap.BaseCost
+		cmd.CommissionChildRate = snap.ChildRate
+		cmd.CommissionAgentCostRate = snap.AgentCostRate
+		cmd.CommissionChildPaid = snap.ChildPaid
+		cmd.CommissionAgentCost = snap.AgentCost
 	}
 
 	cmd.Normalize()
@@ -900,6 +929,12 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		addCacheStorageToAccountStatsCost(usageLog, cacheStorageCost)
 	}
 
+	// 代理佣金：只在一级代理存在时计算。
+	// 售价倍率取本次请求实际生效的 multiplier（已含用户专属/代理默认/账号/高峰），
+	// 成本倍率取管理员为该代理在该分组配置的值；未配置时回落到代理自身售价，
+	// 即代理自用按成本价、对其下级也不产生佣金。
+	agentSnapshot := s.resolveAgentCommission(ctx, user.ID, apiKey.GroupID, cost.TotalCost, multiplier)
+
 	simpleModeKeyRateLimitOnly := simpleModeKeyRateLimitBillingEnabled(s.cfg, apiKey)
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple && !simpleModeKeyRateLimitOnly {
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
@@ -929,6 +964,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		IsSubscriptionBill:         isSubscriptionBilling && !simpleModeKeyRateLimitOnly,
 		AccountRateMultiplier:      accountRateMultiplier,
 		APIKeyService:              input.APIKeyService,
+		AgentCommission:            agentSnapshot,
 		Platform:                   quotaPlatform,
 		SimpleModeKeyRateLimitOnly: simpleModeKeyRateLimitOnly,
 	}, s.billingDeps(), s.usageBillingRepo)
@@ -941,6 +977,72 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
 
 	return nil
+}
+
+// resolveAgentCommission 计算本次请求的佣金快照。
+//
+// 返回 nil 表示不计佣：无上级代理、代理已停用、售价不高于成本、或佣金低于阈值。
+// 任何解析失败都降级为 nil，绝不阻断计费。
+func (s *GatewayService) resolveAgentCommission(ctx context.Context, userID int64, groupID *int64, totalCost, sellingMultiplier float64) *AgentCommissionSnapshot {
+	if s == nil || s.agentCommissionResolver == nil || userID <= 0 {
+		return nil
+	}
+	if !s.agentDistributionAllowed(groupID) {
+		return nil
+	}
+	commissionCtx := s.agentCommissionResolver.Resolve(ctx, userID, groupID)
+	if !commissionCtx.HasAgent() {
+		return nil
+	}
+
+	agentCostRate := ResolveAgentCostMultiplier(commissionCtx.AgentCostRate, sellingMultiplier)
+	childRate := ResolveSellingMultiplier(commissionCtx.ChildRate, nil, sellingMultiplier)
+
+	// 佣金 = TotalCost × (售价 − 成本)。TotalCost 是倍率前目录价，
+	// 因此差价与用户实付、代理成本天然同源，可精确对账。
+	breakdown := CalculateCommission(CommissionInput{
+		TotalCost:     totalCost,
+		ChildRate:     childRate,
+		AgentCostRate: agentCostRate,
+		MinCommission: s.agentMinCommission(),
+	})
+	if !breakdown.Eligible {
+		return nil
+	}
+	return &AgentCommissionSnapshot{
+		AgentUserID:   commissionCtx.AgentUserID,
+		GroupID:       groupID,
+		BaseCost:      totalCost,
+		ChildRate:     childRate,
+		AgentCostRate: agentCostRate,
+		ChildPaid:     breakdown.ChildPaid,
+		AgentCost:     breakdown.AgentCost,
+		Commission:    breakdown.Commission,
+	}
+}
+
+// agentDistributionAllowed 判断该分组是否允许代理分销。
+//
+// 分组开关为 false 时不产生佣金，但仍正常扣费：这是「该分组不开放分销」的
+// 运营策略，不是计费故障。GroupID 缺失（理论上不该发生）时按允许处理，
+// 避免因数据缺失静默停发佣金。
+func (s *GatewayService) agentDistributionAllowed(groupID *int64) bool {
+	if groupID == nil || s == nil || s.groupRepo == nil {
+		return true
+	}
+	group, err := s.groupRepo.GetByID(context.Background(), *groupID)
+	if err != nil || group == nil {
+		return true
+	}
+	return group.AgentDistributionEnabled
+}
+
+// agentMinCommission 读取最低计佣阈值；未配置时为 0（不丢弃任何正佣金）。
+func (s *GatewayService) agentMinCommission() float64 {
+	if s == nil || s.settingService == nil {
+		return 0
+	}
+	return s.settingService.GetAgentMinCommission(context.Background())
 }
 
 // recordUsageMultipliers 返回 token / 图片售价倍率（用户专属 > 分组默认 > 系统默认，token 倍率叠加高峰因子）

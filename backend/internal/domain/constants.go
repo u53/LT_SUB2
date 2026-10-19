@@ -15,6 +15,8 @@ const (
 	RoleAdmin    = "admin"
 	RoleUser     = "user"
 	RoleObserver = "observer"
+	// RoleAgent 是分销代理：只能管理自己的下级与佣金，无其他管理端权限。
+	RoleAgent = "agent"
 )
 
 // Platform constants

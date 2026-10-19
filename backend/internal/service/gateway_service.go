@@ -802,6 +802,8 @@ type GatewayService struct {
 	userGroupRateResolver *userGroupRateResolver
 	userGroupRateCache    *gocache.Cache
 	userGroupRateSF       singleflight.Group
+	// agentCommissionResolver 解析一级代理佣金上下文；为 nil 时不计佣。
+	agentCommissionResolver *AgentCommissionResolver
 	modelsListCache       *gocache.Cache
 	modelsListCacheTTL    time.Duration
 	settingService        *SettingService
@@ -901,6 +903,25 @@ func NewGatewayService(
 		svc.initDebugGatewayBodyFile(path)
 	}
 	return svc
+}
+
+// SetAgentCommissionResolver 注入代理佣金解析器。
+//
+// 做成 setter 而不是构造函数参数：代理佣金是可选能力，未注入时网关照常计费、
+// 只是不产生佣金。这也避免改动既有构造函数的参数列表（大量测试直接调用它）。
+func (s *GatewayService) SetAgentCommissionResolver(resolver *AgentCommissionResolver) {
+	if s == nil {
+		return
+	}
+	s.agentCommissionResolver = resolver
+}
+
+// SetAgentCommissionResolver 注入代理佣金解析器（OpenAI 网关同构）。
+func (s *OpenAIGatewayService) SetAgentCommissionResolver(resolver *AgentCommissionResolver) {
+	if s == nil {
+		return
+	}
+	s.agentCommissionResolver = resolver
 }
 
 // GenerateSessionHash 从预解析请求计算粘性会话 hash

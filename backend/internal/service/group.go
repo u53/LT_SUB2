@@ -22,6 +22,10 @@ type Group struct {
 	I18n           GroupI18n // 名称与描述的界面语言译文；缺失的语言沿用 Name/Description
 	Platform       string
 	RateMultiplier float64
+	// AgentDistributionEnabled 控制该分组是否参与代理分销。
+	// 关闭后即使代理商有上下级关系也不产生佣金，用于「某些分组不开放分销」的场景。
+	// 默认 true，保持存量分组行为不变。
+	AgentDistributionEnabled bool
 	// 高峰时段倍率：peak_rate_enabled 为 true 且当前时刻处于 [PeakStart, PeakEnd) 时，
 	// token 计费倍率额外乘以 PeakRateMultiplier。详见 PeakMultiplierAt。
 	PeakRateEnabled    bool

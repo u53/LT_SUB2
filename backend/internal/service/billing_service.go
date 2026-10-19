@@ -1676,6 +1676,9 @@ type CostInput struct {
 	LongContextBillingEnabled *bool
 	// DisableModelLongContextPricing 豁免模型价卡的长上下文附加费，不改变自定义区间价格。
 	DisableModelLongContextPricing bool
+	// DisableTimePricing 跳过时段定价（峰谷）。用于展示/探测路径：
+	// 阶梯表要展示标准时段价，不能因为当前墙上时钟恰好落在高峰而显示提价后的价格。
+	DisableTimePricing bool
 }
 
 // CalculateCostUnified 统一计费入口，支持三种计费模式。
@@ -1778,7 +1781,7 @@ func (s *BillingService) calculateTokenCost(resolved *ResolvedPricing, input Cos
 	if timePricing == nil && resolved.Source != PricingSourceGroup && resolved.Source != PricingSourceChannel {
 		timePricing = pricing.TimePricing
 	}
-	if timePricing != nil {
+	if timePricing != nil && !input.DisableTimePricing {
 		pricing = applyTimeTier(pricing, timePricing.TimeTierAt(pricingAt))
 	}
 

@@ -52,6 +52,10 @@ func (Group) Fields() []ent.Field {
 		field.Float("rate_multiplier").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
 			Default(1.0),
+		// 是否允许代理分销；关闭后该分组不产生佣金（added by migration 293）。
+		field.Bool("agent_distribution_enabled").
+			Default(true).
+			Comment("是否允许代理分销：关闭后该分组的用量不产生佣金"),
 		// 高峰时段倍率（added by migration 158）
 		field.Bool("peak_rate_enabled").
 			Default(false).

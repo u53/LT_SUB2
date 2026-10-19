@@ -30,6 +30,8 @@ const (
 	FieldI18n = "i18n"
 	// FieldRateMultiplier holds the string denoting the rate_multiplier field in the database.
 	FieldRateMultiplier = "rate_multiplier"
+	// FieldAgentDistributionEnabled holds the string denoting the agent_distribution_enabled field in the database.
+	FieldAgentDistributionEnabled = "agent_distribution_enabled"
 	// FieldPeakRateEnabled holds the string denoting the peak_rate_enabled field in the database.
 	FieldPeakRateEnabled = "peak_rate_enabled"
 	// FieldPeakStart holds the string denoting the peak_start field in the database.
@@ -238,6 +240,7 @@ var Columns = []string{
 	FieldDescription,
 	FieldI18n,
 	FieldRateMultiplier,
+	FieldAgentDistributionEnabled,
 	FieldPeakRateEnabled,
 	FieldPeakStart,
 	FieldPeakEnd,
@@ -342,6 +345,8 @@ var (
 	DefaultI18n domain.GroupI18n
 	// DefaultRateMultiplier holds the default value on creation for the "rate_multiplier" field.
 	DefaultRateMultiplier float64
+	// DefaultAgentDistributionEnabled holds the default value on creation for the "agent_distribution_enabled" field.
+	DefaultAgentDistributionEnabled bool
 	// DefaultPeakRateEnabled holds the default value on creation for the "peak_rate_enabled" field.
 	DefaultPeakRateEnabled bool
 	// DefaultPeakStart holds the default value on creation for the "peak_start" field.
@@ -492,6 +497,11 @@ func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 // ByRateMultiplier orders the results by the rate_multiplier field.
 func ByRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRateMultiplier, opts...).ToFunc()
+}
+
+// ByAgentDistributionEnabled orders the results by the agent_distribution_enabled field.
+func ByAgentDistributionEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAgentDistributionEnabled, opts...).ToFunc()
 }
 
 // ByPeakRateEnabled orders the results by the peak_rate_enabled field.

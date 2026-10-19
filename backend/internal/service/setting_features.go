@@ -88,10 +88,50 @@ func (s *SettingService) IsAffiliateEnabled(ctx context.Context) bool {
 	return value == "true"
 }
 
+// GetAgentMinCommission 返回最低计佣阈值。
+// 低于该值的差价不产生佣金流水，避免账本被 1e-8 级噪声淹没。
+// 解析失败回退 0（不丢弃任何正佣金），保证功能默认可用。
+func (s *SettingService) GetAgentMinCommission(ctx context.Context) float64 {
+	raw, err := s.settingRepo.GetValue(ctx, SettingKeyAgentMinCommission)
+	if err != nil {
+		return 0
+	}
+	value, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+	if err != nil || math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
+		return 0
+	}
+	return value
+}
+
+// GetAgentCommissionFrozenHours 返回佣金冻结期（小时）；0 表示不冻结。
+func (s *SettingService) GetAgentCommissionFrozenHours(ctx context.Context) int {
+	raw, err := s.settingRepo.GetValue(ctx, SettingKeyAgentFrozenHours)
+	if err != nil {
+		return 0
+	}
+	hours, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || hours < 0 {
+		return 0
+	}
+	if hours > 720 {
+		return 720
+	}
+	return hours
+}
+
+// IsAgentCommissionEnabled 返回代理佣金总开关。默认关闭，
+// 与 affiliate 一致：未显式开启时不产生任何佣金流水。
+func (s *SettingService) IsAgentCommissionEnabled(ctx context.Context) bool {
+	raw, err := s.settingRepo.GetValue(ctx, SettingKeyAgentCommissionEnabled)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(raw), "true")
+}
+
 // IsAffiliateAdminRechargeEnabled reports whether admin balance
 // deposits should participate in the affiliate rebate program.
-func (s *SettingService) IsAffiliateAdminRechargeEnabled(ctx context.Context) bool {
-	value, err := s.settingRepo.GetValue(ctx, SettingKeyAffiliateAdminRechargeEnabled)
+func (s *SettingService) IsAffiliateAdminRechargeEnabled(ctx context.Context) bool {	value, err := s.settingRepo.GetValue(ctx, SettingKeyAffiliateAdminRechargeEnabled)
 	if err != nil {
 		return AdminRechargeRebateEnabledDefault
 	}

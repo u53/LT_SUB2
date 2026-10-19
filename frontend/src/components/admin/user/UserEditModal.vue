@@ -127,6 +127,7 @@ const promotingObserver = computed(() => !!props.user && props.user.role !== 'ob
 const resetObserverSetup = () => Object.assign(observerSetup, { create_dedicated_group: false, revoke_public_groups: false, grant_resources: false })
 const roleOptions = computed(() => [
   { value: 'user', label: t('admin.users.roles.user') },
+  { value: 'agent', label: t('admin.users.roles.agent') },
   { value: 'observer', label: t('admin.users.roles.observer') },
   { value: 'admin', label: t('admin.users.roles.admin') }
 ])

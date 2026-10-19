@@ -63,7 +63,7 @@ type CreateUserRequest struct {
 	Password             string   `json:"password" binding:"required,min=6"`
 	Username             string   `json:"username"`
 	Notes                string   `json:"notes"`
-	Role                 string   `json:"role" binding:"omitempty,oneof=admin user observer"`
+	Role                 string   `json:"role" binding:"omitempty,oneof=admin user observer agent"`
 	Balance              *float64 `json:"balance"`
 	Concurrency          int      `json:"concurrency"`
 	RPMLimit             int      `json:"rpm_limit"`
@@ -79,7 +79,7 @@ type UpdateUserRequest struct {
 	Password             string                        `json:"password" binding:"omitempty,min=6"`
 	Username             *string                       `json:"username"`
 	Notes                *string                       `json:"notes"`
-	Role                 string                        `json:"role" binding:"omitempty,oneof=admin user observer"`
+	Role                 string                        `json:"role" binding:"omitempty,oneof=admin user observer agent"`
 	Balance              *float64                      `json:"balance"`
 	Concurrency          *int                          `json:"concurrency"`
 	RPMLimit             *int                          `json:"rpm_limit"`

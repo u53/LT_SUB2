@@ -115,6 +115,7 @@
               <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
               <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
               <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ item.label }}</span>
+              <span v-if="item.tag && !sidebarCollapsed" class="sidebar-nav-tag">{{ item.tag }}</span>
               <span v-if="navBadge(item)" class="sidebar-nav-badge" :class="{ 'sidebar-nav-badge-collapsed': sidebarCollapsed }" data-testid="sidebar-nav-badge">{{ sidebarCollapsed ? '' : navBadgeText(item) }}</span>
             </router-link>
           </template>
@@ -125,6 +126,9 @@
           <div class="sidebar-section-title" :class="{ 'sidebar-section-title-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">
             <span class="sidebar-section-title-text" :class="{ 'sidebar-section-title-text-collapsed': sidebarCollapsed }">
               {{ t('nav.myAccount') }}
+            </span>
+            <span v-if="authStore.isAgent && !sidebarCollapsed" class="sidebar-section-tag">
+              {{ t('nav.agentTag') }}
             </span>
           </div>
 
@@ -141,6 +145,7 @@
             <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
             <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
             <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ item.label }}</span>
+            <span v-if="item.tag && !sidebarCollapsed" class="sidebar-nav-tag">{{ item.tag }}</span>
             <span v-if="navBadge(item)" class="sidebar-nav-badge" :class="{ 'sidebar-nav-badge-collapsed': sidebarCollapsed }" data-testid="sidebar-nav-badge">{{ sidebarCollapsed ? '' : navBadgeText(item) }}</span>
           </router-link>
         </div>
@@ -162,6 +167,7 @@
             <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
             <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
             <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ item.label }}</span>
+            <span v-if="item.tag && !sidebarCollapsed" class="sidebar-nav-tag">{{ item.tag }}</span>
             <span v-if="navBadge(item)" class="sidebar-nav-badge" :class="{ 'sidebar-nav-badge-collapsed': sidebarCollapsed }" data-testid="sidebar-nav-badge">{{ sidebarCollapsed ? '' : navBadgeText(item) }}</span>
           </router-link>
         </div>
@@ -243,6 +249,8 @@ interface NavItem {
   featureFlag?: () => boolean | undefined
   /** Optional count shown as a red badge (a dot while the sidebar is collapsed). */
   badge?: () => number
+  /** 可选的文字标签（如「代理」），渲染在菜单项右侧，用于标识身份入口。 */
+  tag?: string
 }
 
 // applyFeatureFlags 递归过滤掉 featureFlag() === false 的节点（含子节点）。
@@ -796,8 +804,10 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/orders', label: t('nav.myOrders'), icon: OrderListIcon, hideInSimpleMode: true, featureFlag: flagPayment },
     { path: '/redeem', label: t('nav.redeem'), icon: GiftIcon, hideInSimpleMode: true },
     { path: '/affiliate', label: t('nav.affiliate'), icon: UsersIcon, hideInSimpleMode: true, featureFlag: flagAffiliate },
+    { path: '/agent', label: t('nav.agentCenter'), icon: UsersIcon, hideInSimpleMode: true, featureFlag: () => authStore.isAgent, tag: t('nav.agentTag') },
     { path: '/support-tickets', label: t('nav.supportTickets'), icon: SupportTicketIcon, featureFlag: flagUserSupportTickets, badge: () => supportTicketStore.userUnread },
-    { path: '/profile', label: t('nav.profile'), icon: UserIcon },
+    // 代理身份在「个人资料」上也标一个 tag：用户不一定记得侧边栏里有代理中心入口。
+    { path: '/profile', label: t('nav.profile'), icon: UserIcon, tag: authStore.isAgent ? t('nav.agentTag') : undefined },
     ...customMenuItemsForUser.value.map((item): NavItem => ({
       path: `/custom/${item.id}`,
       label: item.label,
@@ -898,6 +908,18 @@ const adminNavItems = computed((): NavItem[] => {
         { path: '/admin/affiliates/invites', label: t('nav.affiliateInviteRecords'), icon: UsersIcon },
         { path: '/admin/affiliates/rebates', label: t('nav.affiliateRebateRecords'), icon: OrderIcon },
         { path: '/admin/affiliates/transfers', label: t('nav.affiliateTransferRecords'), icon: CreditCardIcon },
+      ],
+    },
+    {
+      path: '/admin/agents',
+      label: t('nav.agentManagement'),
+      icon: UsersIcon,
+      hideInSimpleMode: true,
+      expandOnly: true,
+      children: [
+        { path: '/admin/agents/list', label: t('nav.agentList'), icon: UsersIcon },
+        { path: '/admin/agents/commissions', label: t('nav.agentCommissions'), icon: OrderIcon },
+        { path: '/admin/agents/withdrawals', label: t('nav.agentWithdrawals'), icon: CreditCardIcon },
       ],
     },
     {
@@ -1205,6 +1227,42 @@ onBeforeUnmount(() => {
   width: 0.5rem;
   height: 0.5rem;
   padding: 0;
+}
+
+/* 身份标签（如「代理」）：比计数徽章更轻，避免和未读红点抢注意力。 */
+.sidebar-nav-tag {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 0.375rem;
+  background: rgb(237 233 254);
+  color: rgb(109 40 217);
+  font-size: 0.625rem;
+  font-weight: 600;
+  line-height: 1.125rem;
+  white-space: nowrap;
+}
+
+.dark .sidebar-nav-tag {
+  background: rgb(76 29 149 / 0.35);
+  color: rgb(196 181 253);
+}
+
+.sidebar-section-tag {
+  margin-left: 0.5rem;
+  flex-shrink: 0;
+  padding: 0 0.3125rem;
+  border-radius: 0.375rem;
+  background: rgb(237 233 254);
+  color: rgb(109 40 217);
+  font-size: 0.625rem;
+  font-weight: 600;
+  line-height: 1.125rem;
+}
+
+.dark .sidebar-section-tag {
+  background: rgb(76 29 149 / 0.35);
+  color: rgb(196 181 253);
 }
 
 .sidebar-label-collapsed {

@@ -515,6 +515,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	}
 
 	simpleModeKeyRateLimitOnly := simpleModeKeyRateLimitBillingEnabled(s.cfg, apiKey)
+	// 代理佣金：与通用网关同口径，售价取本次实际生效的 token 倍率。
+	agentSnapshot := s.resolveAgentCommission(ctx, user.ID, apiKey.GroupID, apiKey.Group, cost.TotalCost, multiplier)
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple && !simpleModeKeyRateLimitOnly {
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
 		logger.LegacyPrintf("service.openai_gateway", "[SIMPLE MODE] Usage recorded (not billed): user=%d, tokens=%d", usageLog.UserID, usageLog.TotalTokens())
@@ -539,6 +541,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		IsSubscriptionBill:         isSubscriptionBilling && !simpleModeKeyRateLimitOnly,
 		AccountRateMultiplier:      accountRateMultiplier,
 		APIKeyService:              input.APIKeyService,
+		AgentCommission:            agentSnapshot,
 		Platform:                   quotaPlatform,
 		SimpleModeKeyRateLimitOnly: simpleModeKeyRateLimitOnly,
 	}, s.billingDeps(), s.usageBillingRepo)
@@ -551,6 +554,59 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
 
 	return nil
+}
+
+// resolveAgentCommission 计算本次请求的佣金快照（与通用网关同口径）。
+func (s *OpenAIGatewayService) resolveAgentCommission(ctx context.Context, userID int64, groupID *int64, group *Group, totalCost, sellingMultiplier float64) *AgentCommissionSnapshot {
+	if s == nil || s.agentCommissionResolver == nil || userID <= 0 {
+		return nil
+	}
+	if !s.agentDistributionAllowed(groupID, group) {
+		return nil
+	}
+	commissionCtx := s.agentCommissionResolver.Resolve(ctx, userID, groupID)
+	if !commissionCtx.HasAgent() {
+		return nil
+	}
+
+	agentCostRate := ResolveAgentCostMultiplier(commissionCtx.AgentCostRate, sellingMultiplier)
+	childRate := ResolveSellingMultiplier(commissionCtx.ChildRate, nil, sellingMultiplier)
+
+	breakdown := CalculateCommission(CommissionInput{
+		TotalCost:     totalCost,
+		ChildRate:     childRate,
+		AgentCostRate: agentCostRate,
+		MinCommission: s.agentMinCommission(),
+	})
+	if !breakdown.Eligible {
+		return nil
+	}
+	return &AgentCommissionSnapshot{
+		AgentUserID:   commissionCtx.AgentUserID,
+		GroupID:       groupID,
+		BaseCost:      totalCost,
+		ChildRate:     childRate,
+		AgentCostRate: agentCostRate,
+		ChildPaid:     breakdown.ChildPaid,
+		AgentCost:     breakdown.AgentCost,
+		Commission:    breakdown.Commission,
+	}
+}
+
+// agentDistributionAllowed 判断该分组是否允许代理分销（OpenAI 网关同构）。
+// OpenAI 服务没有 groupRepo，直接用认证快照里已带的分组，避免热路径再查库。
+func (s *OpenAIGatewayService) agentDistributionAllowed(groupID *int64, group *Group) bool {
+	if group != nil {
+		return group.AgentDistributionEnabled
+	}
+	// 没有分组快照时按允许处理：数据缺失不应静默停发佣金。
+	return true
+}
+
+func (s *OpenAIGatewayService) agentMinCommission() float64 {	if s == nil || s.settingService == nil {
+		return 0
+	}
+	return s.settingService.GetAgentMinCommission(context.Background())
 }
 
 // hasIdentifiedOpenAIResponsePricing 判断上游自报的响应模型是否可以作为计费基准，

@@ -445,6 +445,17 @@
               </button>
               <button
                 v-if="!authStore.isSimpleMode"
+                data-testid="group-agent-costs"
+                @click="handleAgentCosts(row)"
+                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-emerald-600 dark:hover:bg-dark-700 dark:hover:text-emerald-400"
+              >
+                <Icon name="trendingUp" size="sm" />
+                <span class="text-xs">{{
+                  t("admin.groups.agentCosts")
+                }}</span>
+              </button>
+              <button
+                v-if="!authStore.isSimpleMode"
                 data-testid="group-rpm-overrides"
                 @click="handleRPMOverrides(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-orange-600 dark:hover:bg-dark-700 dark:hover:text-orange-400"
@@ -692,6 +703,17 @@
             data-testid="create-stream-only"
             :aria-label="t('admin.groups.form.streamOnly')"
             v-model="createForm.stream_only"
+          />
+        </div>
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <label class="input-label">{{ t("admin.groups.agentDistribution") }}</label>
+            <p class="input-hint">{{ t("admin.groups.agentDistributionHint") }}</p>
+          </div>
+          <Toggle
+            data-testid="create-agent-distribution"
+            :aria-label="t('admin.groups.agentDistribution')"
+            v-model="createForm.agent_distribution_enabled"
           />
         </div>
         <ReasoningEffortPolicyFields
@@ -2363,6 +2385,17 @@
             data-testid="edit-stream-only"
             :aria-label="t('admin.groups.form.streamOnly')"
             v-model="editForm.stream_only"
+          />
+        </div>
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <label class="input-label">{{ t("admin.groups.agentDistribution") }}</label>
+            <p class="input-hint">{{ t("admin.groups.agentDistributionHint") }}</p>
+          </div>
+          <Toggle
+            data-testid="edit-agent-distribution"
+            :aria-label="t('admin.groups.agentDistribution')"
+            v-model="editForm.agent_distribution_enabled"
           />
         </div>
         <ReasoningEffortPolicyFields
@@ -4343,6 +4376,113 @@
       @success="loadGroups"
     />
 
+    <!-- Group Agent Costs Modal：按代理逐个编辑本分组的成本倍率 -->
+    <BaseDialog
+      :show="showAgentCostsModal"
+      :title="t('admin.groups.agentCostsTitle')"
+      width="normal"
+      @close="closeAgentCostsModal"
+    >
+      <div v-if="agentCostsGroup" class="space-y-5">
+        <!-- 分组信息 -->
+        <div
+          class="flex flex-wrap items-center gap-3 rounded-lg bg-gray-50 px-4 py-2.5 text-sm dark:bg-dark-700"
+        >
+          <span class="inline-flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
+            <PlatformIcon :platform="agentCostsGroup.platform" size="sm" />
+            {{ t("admin.groups.platforms." + agentCostsGroup.platform, platformLabel(agentCostsGroup.platform)) }}
+          </span>
+          <span class="text-gray-400">|</span>
+          <span class="font-medium text-gray-900 dark:text-white">{{ agentCostsGroup.name }}</span>
+          <span class="text-gray-400">|</span>
+          <span class="text-gray-600 dark:text-gray-400">
+            {{ t("admin.groups.agentCostsGroupRate") }}: {{ agentCostsGroup.rate_multiplier }}x
+          </span>
+        </div>
+
+        <p class="text-xs text-gray-500 dark:text-gray-400">
+          {{ t("admin.groups.agentCostsDescription") }}
+        </p>
+
+        <!-- 加载状态 -->
+        <div v-if="agentCostsLoading" class="flex justify-center py-10">
+          <Icon name="refresh" size="lg" class="animate-spin text-primary-500" />
+        </div>
+
+        <template v-else>
+          <div
+            v-if="agentCostsAgents.length === 0"
+            class="flex flex-col items-center justify-center py-10 text-center"
+          >
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+              {{ t("admin.groups.agentCostsNoAgents") }}
+            </p>
+            <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              {{ t("admin.groups.agentCostsNoAgentsHint") }}
+            </p>
+          </div>
+
+          <template v-else>
+            <div>
+              <label class="input-label">{{ t("admin.groups.agentCostsSelectAgent") }}</label>
+              <Select
+                v-model="agentCostsSelectedAgentId"
+                :options="agentCostsAgentOptions"
+                searchable
+                :placeholder="t('admin.groups.agentCostsSelectPlaceholder')"
+                data-testid="group-agent-costs-select"
+                @change="handleAgentCostsSelect"
+              />
+            </div>
+
+            <div v-if="agentCostsSelectedAgentId !== null">
+              <label class="input-label">{{ t("admin.groups.agentCostsCostRate") }}</label>
+              <input
+                v-model.number="agentCostsRate"
+                type="number"
+                step="0.001"
+                min="0.001"
+                autocomplete="off"
+                class="input"
+                :disabled="agentCostsRateLoading"
+                :placeholder="agentCostsGroupRatePlaceholder"
+                data-testid="group-agent-costs-rate"
+              />
+              <p class="input-hint">{{ t("admin.groups.agentCostsUseDefault") }}</p>
+            </div>
+
+            <p v-if="agentCostsLoadFailed" class="text-xs text-amber-600 dark:text-amber-400">
+              {{ t("admin.groups.agentCostsLoadFailed") }}
+            </p>
+          </template>
+        </template>
+      </div>
+
+      <template #footer>
+        <div class="flex justify-end gap-3">
+          <button type="button" class="btn btn-secondary px-5" @click="closeAgentCostsModal">
+            {{ t("common.cancel") }}
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary px-6"
+            :disabled="
+              agentCostsSaving ||
+              agentCostsLoading ||
+              agentCostsRateLoading ||
+              agentCostsSelectedAgentId === null ||
+              agentCostsAgents.length === 0
+            "
+            data-testid="group-agent-costs-save"
+            @click="handleSaveAgentCosts"
+          >
+            <Icon v-if="agentCostsSaving" name="refresh" size="sm" class="mr-1 animate-spin" />
+            {{ agentCostsSaving ? t("common.saving") : t("common.save") }}
+          </button>
+        </div>
+      </template>
+    </BaseDialog>
+
     <!-- Group RPM Overrides Modal -->
     <GroupRPMOverridesModal
       :show="showRPMOverridesModal"
@@ -4370,6 +4510,8 @@ import { useOnboardingStore } from "@/stores/onboarding";
 import { adminAPI } from "@/api/admin";
 import type {
   AdminGroup,
+  AgentGroupCostItem,
+  AgentListItem,
   CodexModelsManifestConfig,
   CompositeModelRoute,
   CompositeModelRouteInput,
@@ -4399,6 +4541,7 @@ import { platformLabel } from "@/utils/platformColors";
 import Icon from "@/components/icons/Icon.vue";
 import GroupI18nField from "@/components/admin/group/GroupI18nField.vue";
 import GroupRateMultipliersModal from "@/components/admin/group/GroupRateMultipliersModal.vue";
+import { apiClient } from "@/api/client";
 import GroupRPMOverridesModal from "@/components/admin/group/GroupRPMOverridesModal.vue";
 import GroupUserDeniedModelsModal from "@/components/admin/group/GroupUserDeniedModelsModal.vue";
 import GroupCapacityBadge from "@/components/common/GroupCapacityBadge.vue";
@@ -4945,6 +5088,128 @@ const deletingGroup = ref<AdminGroup | null>(null);
 const duplicatingGroupIds = reactive(new Set<number>());
 const showRateMultipliersModal = ref(false);
 const rateMultipliersGroup = ref<AdminGroup | null>(null);
+const showAgentCostsModal = ref(false);
+const agentCostsGroup = ref<AdminGroup | null>(null);
+// 代理成本弹窗的本地状态：只按「选定代理 + 当前分组」读写，避免一次拉取全部代理的分组成本。
+const agentCostsLoading = ref(false);
+const agentCostsSaving = ref(false);
+const agentCostsRateLoading = ref(false);
+const agentCostsLoadFailed = ref(false);
+const agentCostsAgents = ref<AgentListItem[]>([]);
+const agentCostsSelectedAgentId = ref<number | null>(null);
+// v-model.number 清空输入框时会产生空串，因此这里允许 string 中间态
+const agentCostsRate = ref<number | string | null>(null);
+// 服务端已配置的成本倍率；null 表示该分组未给此代理配置过（清空时无需提交）
+const agentCostsOriginalRate = ref<number | null>(null);
+// 分组默认倍率作为输入框占位（模板里 agentCostsGroup 可能为 null，先算好）
+const agentCostsGroupRatePlaceholder = computed(() =>
+  String(agentCostsGroup.value?.rate_multiplier ?? 1),
+);
+const agentCostsAgentOptions = computed(() =>
+  agentCostsAgents.value.map((agent) => ({
+    value: agent.user_id,
+    label: agent.username ? `${agent.username} (${agent.email})` : agent.email,
+  })),
+);
+// 后端可能返回裸数组或分页结构，统一成代理列表。
+const normalizeAgentList = (payload: unknown): AgentListItem[] => {
+  if (Array.isArray(payload)) return payload as AgentListItem[];
+  const items = (payload as { items?: AgentListItem[] } | null)?.items;
+  return Array.isArray(items) ? items : [];
+};
+const loadAgentCostsAgents = async () => {
+  agentCostsLoading.value = true;
+  agentCostsLoadFailed.value = false;
+  agentCostsSelectedAgentId.value = null;
+  agentCostsRate.value = null;
+  agentCostsOriginalRate.value = null;
+  try {
+    const { data } = await apiClient.get<unknown>("/admin/agents", {
+      params: { page: 1, page_size: 1000 },
+    });
+    agentCostsAgents.value = normalizeAgentList(data);
+  } catch (error) {
+    console.error("Failed to load agents:", error);
+    agentCostsLoadFailed.value = true;
+    agentCostsAgents.value = [];
+  } finally {
+    agentCostsLoading.value = false;
+  }
+};
+const loadAgentCostsRate = async () => {
+  if (!agentCostsGroup.value || agentCostsSelectedAgentId.value === null) return;
+  const groupID = agentCostsGroup.value.id;
+  agentCostsRateLoading.value = true;
+  try {
+    // GET /admin/agents/:id/group-costs 返回 { agent_user_id, group_costs: map[groupID]cost }
+    const { data } = await apiClient.get<{
+      agent_user_id: number;
+      group_costs: Record<string, number>;
+    }>(`/admin/agents/${agentCostsSelectedAgentId.value}/group-costs`);
+    const matched = data?.group_costs?.[String(groupID)];
+    agentCostsOriginalRate.value = typeof matched === "number" ? matched : null;
+    agentCostsRate.value = typeof matched === "number" ? matched : null;  } catch (error) {
+    console.error("Failed to load agent group cost:", error);
+    agentCostsLoadFailed.value = true;
+    agentCostsOriginalRate.value = null;
+    agentCostsRate.value = null;
+  } finally {
+    agentCostsRateLoading.value = false;
+  }
+};
+const handleAgentCostsSelect = () => {
+  void loadAgentCostsRate();
+};
+const handleSaveAgentCosts = async () => {
+  if (!agentCostsGroup.value || agentCostsSelectedAgentId.value === null || agentCostsSaving.value) {
+    return;
+  }
+  const groupID = agentCostsGroup.value.id;
+  const rate = Number(agentCostsRate.value);
+  const hasRate = Number.isFinite(rate) && rate > 0;
+  if (!hasRate && agentCostsOriginalRate.value === null) {
+    // 未配置且仍留空，无需提交
+    appStore.showSuccess(t("admin.groups.agentCostsSaved"));
+    closeAgentCostsModal();
+    return;
+  }
+  agentCostsSaving.value = true;
+  try {
+    // PUT 是全量替换语义：必须先读取该代理当前的全部分组成本，
+    // 只修改本分组后再整体提交，否则会把其他分组的折扣一并清掉。
+    const { data: current } = await apiClient.get<{
+      agent_user_id: number;
+      group_costs: Record<string, number>;
+    }>(`/admin/agents/${agentCostsSelectedAgentId.value}/group-costs`);
+    const nextCosts: AgentGroupCostItem[] = Object.entries(current?.group_costs || {})
+      .map<AgentGroupCostItem>(([key, value]) => ({
+        group_id: Number(key),
+        cost_multiplier: Number(value),
+      }))
+      .filter(
+        (item) =>
+          Number.isFinite(item.group_id) &&
+          item.group_id > 0 &&
+          Number.isFinite(item.cost_multiplier) &&
+          item.cost_multiplier > 0 &&
+          item.group_id !== groupID,
+      );
+    if (hasRate) {
+      nextCosts.push({ group_id: groupID, cost_multiplier: rate });
+    }
+    await apiClient.put(`/admin/agents/${agentCostsSelectedAgentId.value}/group-costs`, {
+      group_costs: nextCosts,
+    });
+    appStore.showSuccess(t("admin.groups.agentCostsSaved"));
+    closeAgentCostsModal();
+  } catch (error) {
+    appStore.showError(
+      extractApiErrorMessage(error, t("admin.groups.agentCostsSaveFailed")),
+    );
+  } finally {
+    agentCostsSaving.value = false;
+  }
+};
 const showRPMOverridesModal = ref(false);
 const rpmOverridesGroup = ref<AdminGroup | null>(null);
 const showUserDeniedModelsModal = ref(false);
@@ -5122,6 +5387,8 @@ const createForm = reactive({
   max_reasoning_effort: "",
   max_reasoning_effort_over_limit: reasoningEffortOverLimitDowngrade,
   reasoning_effort_mappings: [] as ReasoningEffortMappingRow[],
+  // 允许代理分销该分组（默认开启；后端未支持时该字段被忽略）
+  agent_distribution_enabled: true,
 });
 
 // 简单账号类型（用于模型路由选择）
@@ -5493,6 +5760,8 @@ const editForm = reactive({
   max_reasoning_effort: "",
   max_reasoning_effort_over_limit: reasoningEffortOverLimitDowngrade,
   reasoning_effort_mappings: [] as ReasoningEffortMappingRow[],
+  // 允许代理分销该分组（默认开启；后端未支持时该字段被忽略）
+  agent_distribution_enabled: true,
 });
 
 type ImagePricingFormState = {
@@ -5940,6 +6209,7 @@ const closeCreateModal = () => {
   createForm.max_reasoning_effort = "";
   createForm.max_reasoning_effort_over_limit = reasoningEffortOverLimitDowngrade;
   createForm.reasoning_effort_mappings = [];
+  createForm.agent_distribution_enabled = true;
   createReasoningEffortPolicyRef.value?.resetValidation();
   resetModelAllowlistState(createModelAllowlistState);
   createModelRoutingRules.value = [];
@@ -6265,6 +6535,8 @@ const handleEdit = async (group: AdminGroup) => {
     group.reasoning_effort_mappings,
     group.platform,
   );
+  // agent_distribution_enabled 后端未返回时默认开启（与创建默认值一致）
+  editForm.agent_distribution_enabled = group.agent_distribution_enabled ?? true;
   resetModelAllowlistState(editModelAllowlistState, group.model_allowlist);
   // 固定账号 manifest 配置：回显配置并异步解析已存账号名称（失败显示 #<id>）
   const savedCodexManifestConfig =
@@ -6548,6 +6820,21 @@ const removeEditMessagesDispatchMapping = (row: MessagesDispatchMappingRow) => {
 const handleRateMultipliers = (group: AdminGroup) => {
   rateMultipliersGroup.value = group;
   showRateMultipliersModal.value = true;
+};
+
+const handleAgentCosts = (group: AdminGroup) => {
+  agentCostsGroup.value = group;
+  showAgentCostsModal.value = true;
+  void loadAgentCostsAgents();
+};
+
+const closeAgentCostsModal = () => {
+  showAgentCostsModal.value = false;
+  agentCostsGroup.value = null;
+  agentCostsSelectedAgentId.value = null;
+  agentCostsRate.value = null;
+  agentCostsOriginalRate.value = null;
+  agentCostsLoadFailed.value = false;
 };
 
 const handleRPMOverrides = (group: AdminGroup) => {

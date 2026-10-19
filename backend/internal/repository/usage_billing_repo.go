@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -13,10 +15,22 @@ import (
 
 type usageBillingRepository struct {
 	db *sql.DB
+	// agentCommissionFrozenHours 解析代理佣金冻结期；为 nil 时佣金直接进可提现余额。
+	// 做成函数而非值，是因为冻结期是系统设置，可在运行期被管理员修改。
+	agentCommissionFrozenHours func(ctx context.Context) int
 }
 
 func NewUsageBillingRepository(_ *dbent.Client, sqlDB *sql.DB) service.UsageBillingRepository {
 	return &usageBillingRepository{db: sqlDB}
+}
+
+// SetAgentCommissionFrozenHours 注入佣金冻结期读取函数（wire 装配时调用）。
+// 未注入时按 0 处理，即佣金立即进入可提现余额。
+func (r *usageBillingRepository) SetAgentCommissionFrozenHours(loader func(ctx context.Context) int) {
+	if r == nil {
+		return
+	}
+	r.agentCommissionFrozenHours = loader
 }
 
 func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBillingCommand) (_ *service.UsageBillingApplyResult, err error) {
@@ -210,7 +224,72 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		result.QuotaState = quotaState
 	}
 
+	// 代理佣金与扣费同事务：扣费失败时佣金一起回滚，避免"钱没扣但佣金已发"。
+	// 幂等键复用 (request_id, api_key_id)，重放时 INSERT ... ON CONFLICT 不插入，
+	// 账户也不会加钱。
+	if err := r.applyAgentCommissionEffect(ctx, tx, cmd); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// nullableUserIDValue 把非零用户 ID 转成指针，0 视为"未设置"。
+// 佣金流水的 child_user_id 可空（上级已删时保留流水），复用 nullableInt64Arg 的 SQL 语义。
+func nullableUserIDValue(id int64) *int64 {
+	if id <= 0 {
+		return nil
+	}
+	return &id
+}
+
+// applyAgentCommissionEffect 在同一事务内写佣金流水并增加代理佣金账户。
+//
+// 只在 AgentUserID 有效且佣金 > 0 时生效。无上级代理的请求字段为零值，
+// 自然跳过，不产生任何额外查询。
+func (r *usageBillingRepository) applyAgentCommissionEffect(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand) error {
+	if cmd == nil || cmd.AgentUserID <= 0 || cmd.CommissionAmount <= 0 {
+		return nil
+	}
+
+	frozenHours := 0
+	if r.agentCommissionFrozenHours != nil {
+		frozenHours = r.agentCommissionFrozenHours(ctx)
+	}
+	status := AgentCommissionStatusAvailable
+	var frozenUntil *time.Time
+	if frozenHours > 0 {
+		status = AgentCommissionStatusPending
+		until := time.Now().Add(time.Duration(frozenHours) * time.Hour)
+		frozenUntil = &until
+	}
+
+	entry := CommissionLedgerEntry{
+		AgentUserID:   cmd.AgentUserID,
+		ChildUserID:   nullableUserIDValue(cmd.UserID),
+		RequestID:     cmd.RequestID,
+		APIKeyID:      cmd.APIKeyID,
+		GroupID:       cmd.GroupID,
+		Model:         cmd.Model,
+		BaseCost:      cmd.CommissionBaseCost,
+		ChildRate:     cmd.CommissionChildRate,
+		AgentCostRate: cmd.CommissionAgentCostRate,
+		ChildPaid:     cmd.CommissionChildPaid,
+		AgentCost:     cmd.CommissionAgentCost,
+		Commission:    cmd.CommissionAmount,
+		Status:        status,
+		FrozenUntil:   frozenUntil,
+	}
+
+	inserted, err := insertCommissionExec(ctx, tx, entry)
+	if err != nil {
+		return fmt.Errorf("agent commission effect: %w", err)
+	}
+	if !inserted {
+		// 同一请求重放：流水已存在，账户不能重复加钱。
+		return nil
+	}
+	return creditCommissionAccountExec(ctx, tx, entry.AgentUserID, entry.Commission, status == AgentCommissionStatusPending)
 }
 
 func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscriptionID int64, costUSD float64) error {

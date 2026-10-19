@@ -1,6 +1,8 @@
 # 本地杂项文档、测试数据和外部项目副本
 /docs-local/
 .codex
+# JDC 本地上下文索引与浏览器截图缓存
+.jdc/
 
 # ===================
 # Go 后端
@@ -113,6 +115,7 @@ backend/internal/service/data/
 # 本地配置文件（包含敏感信息）
 # ===================
 backend/config.yaml
+backend/config.local.yaml
 deploy/config.yaml
 backend/.installed
 

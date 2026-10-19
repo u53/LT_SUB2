@@ -29,6 +29,7 @@
         <label class="input-label">{{ t('admin.users.form.roleLabel') }}</label>
         <select v-model="form.role" class="input">
           <option value="user">{{ t('admin.users.roles.user') }}</option>
+          <option value="agent">{{ t('admin.users.roles.agent') }}</option>
           <option value="observer">{{ t('admin.users.roles.observer') }}</option>
           <option value="admin">{{ t('admin.users.roles.admin') }}</option>
         </select>
@@ -85,6 +86,8 @@ const props = defineProps<{ show: boolean }>()
 const emit = defineEmits(['close', 'success']); const { t } = useI18n()
 const appStore = useAppStore()
 
+// api/admin/users.ts 的 create() 目前仍把 role 限定为三种角色，这里保持同样的窄类型，
+// 避免越权改动该文件；<option value="agent"> 选中后按字符串原样提交给后端。
 const form = reactive({ email: '', password: '', username: '', notes: '', role: 'user' as 'user' | 'admin' | 'observer', observer_group_ids: [] as number[], balance: '', concurrency: 1, rpm_limit: 0 })
 
 const stepUp = useStepUp()

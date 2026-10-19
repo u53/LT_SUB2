@@ -758,7 +758,45 @@ export default {
       roles: {
         observer: 'Observer',
         admin: 'Admin',
+        agent: 'Agent',
         user: 'User'
+      },
+      // Agent config dialog
+      agentConfig: {
+        title: 'Agent Configuration',
+        menuItem: 'Agent Configuration',
+        hint: 'Configure distribution discounts, commission freeze and per-group cost rates for {email}',
+        notAgentTitle: 'This user is not an agent yet',
+        notAgentHint: 'An agent can recruit downlines and earns the spread against the group cost rate. Promoting requires configuring its downline discount afterwards.',
+        promote: 'Make Agent',
+        promoted: 'User promoted to agent',
+        promoteFailed: 'Failed to promote user to agent',
+        enabled: 'Enable agent distribution',
+        enabledHint: 'When disabled the agent cannot recruit new downlines; existing commissions are unaffected',
+        defaultRate: 'Default downline discount rate',
+        defaultRateHint: 'Downline cost = group cost rate × this rate; range 0.001 to 1',
+        useGroupPrice: 'Empty bills at the group public rate',
+        account: {
+          available: 'Withdrawable commission',
+          frozen: 'Frozen commission',
+          total: 'Total commission'
+        },
+        frozenHours: 'Commission freeze (hours)',
+        frozenHoursHint: 'Commissions become withdrawable after this delay; 0 means no freeze',
+        notes: 'Notes',
+        notesPlaceholder: 'Agent notes, visible to admins only',
+        groupCosts: {
+          title: 'Per-group cost discounts',
+          description: 'Set an agent cost rate for each active group; leave empty to use the group default rate',
+          empty: 'No active groups',
+          group: 'Group',
+          groupRate: 'Group default rate',
+          costRate: 'Cost rate',
+          useGroupRate: 'Empty uses default'
+        },
+        loadFailed: 'Failed to load the agent configuration; saving may overwrite the existing one',
+        saved: 'Agent configuration saved',
+        saveFailed: 'Failed to save the agent configuration'
       },
       // Settings Dropdowns
       filterSettings: 'Filter Settings',
@@ -1039,6 +1077,22 @@ export default {
       nameRequired: 'Please enter group name',
       rateMultipliers: 'Rate Multipliers',
       rateMultipliersTitle: 'Group Rate Multipliers',
+      // Group agent cost dialog
+      agentCosts: 'Agent Costs',
+      agentCostsTitle: 'Group Agent Cost Rates',
+      agentCostsDescription: 'Set the cost rate an agent pays in this group; leave empty to use the group default rate',
+      agentCostsSelectAgent: 'Select agent',
+      agentCostsSelectPlaceholder: 'Select an agent',
+      agentCostsNoAgents: 'No agent users yet',
+      agentCostsNoAgentsHint: 'Promote a user to agent in user management first',
+      agentCostsGroupRate: 'Group default rate',
+      agentCostsCostRate: 'Agent cost rate',
+      agentCostsUseDefault: 'Empty uses default',
+      agentCostsSaved: 'Agent cost rate saved',
+      agentCostsSaveFailed: 'Failed to save the agent cost rate',
+      agentCostsLoadFailed: 'Failed to load agent cost rates',
+      agentDistribution: 'Allow agent distribution',
+      agentDistributionHint: 'When disabled agents cannot use this group as a downline purchase group',
       addUserRate: 'Add User Rate Multiplier',
       rpmOverrides: 'RPM Overrides',
       rpmOverridesTitle: 'Group RPM Overrides',
@@ -1361,6 +1415,20 @@ export default {
         geminiImage: 'Gemini Image',
         hint: 'Select at least one model family'
       }
+    },
+
+    // Agent commission settings card (own namespace to avoid clashing with admin/settings.ts)
+    agentCommission: {
+      title: 'Agent Commission',
+      description: 'Agents earn the spread against group cost rates. Configure the minimum threshold, freeze period and minimum withdrawal. Disabled by default.',
+      enabled: 'Enable agent commission',
+      enabledHint: 'When disabled no new commission accrues; already booked commissions are unaffected',
+      minCommission: 'Minimum commission threshold',
+      minCommissionHint: 'Commissions below this amount are dropped to avoid tiny ledger entries',
+      frozenHours: 'Commission freeze (hours)',
+      frozenHoursDesc: 'Commissions become withdrawable after this delay; 0 means no freeze',
+      minWithdraw: 'Minimum withdrawal',
+      minWithdrawHint: 'Lower bound for a single agent withdrawal; 0 means unlimited'
     },
 
     // Available Channels (aggregated read-only view)

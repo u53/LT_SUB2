@@ -97,6 +97,9 @@ export const useAuthStore = defineStore('auth', () => {
   })
 
   const isObserver = computed(() => user.value?.role === 'observer')
+  // 代理（分销商）：可管理下级折扣与佣金，但不具备账号/用户管理权限。
+  const isAgent = computed(() => user.value?.role === 'agent')
+  // 代理角色不参与账号管理，避免代理越权查看上游账号凭据。
   const canManageAccounts = computed(() => isAdmin.value || isObserver.value)
 
   const isSimpleMode = computed(() => runMode.value === 'simple')
@@ -502,6 +505,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     isAdmin,
     isObserver,
+    isAgent,
     canManageAccounts,
     isSimpleMode,
     hasPendingAuthSession,

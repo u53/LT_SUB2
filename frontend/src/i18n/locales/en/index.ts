@@ -19,9 +19,13 @@ import misc from './misc'
 import requestTiming from './requestTiming'
 
 import autoConfig from './autoConfig'
+import agentCenter from './agentCenter'
+import agents from './admin/agents'
 
 export default {
   autoConfig,
+  ...agentCenter,
+  ...agents,
   priorityScheduling,
   qualityOps,
   controlledExperiments,

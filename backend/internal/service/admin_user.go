@@ -111,8 +111,8 @@ func normalizeUserRole(role, fallback string) (string, error) {
 	if role == "" {
 		return fallback, nil
 	}
-	if role != RoleAdmin && role != RoleUser && role != RoleObserver {
-		return "", fmt.Errorf("invalid role: %q (must be %s, %s or %s)", role, RoleAdmin, RoleUser, RoleObserver)
+	if role != RoleAdmin && role != RoleUser && role != RoleObserver && role != RoleAgent {
+		return "", fmt.Errorf("invalid role: %q (must be %s, %s, %s or %s)", role, RoleAdmin, RoleUser, RoleObserver, RoleAgent)
 	}
 	return role, nil
 }

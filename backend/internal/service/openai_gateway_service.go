@@ -499,6 +499,8 @@ type OpenAIGatewayService struct {
 	rateLimitService       *RateLimitService
 	billingCacheService    *BillingCacheService
 	userGroupRateResolver  *userGroupRateResolver
+	// agentCommissionResolver 解析一级代理佣金上下文；为 nil 时不计佣。
+	agentCommissionResolver *AgentCommissionResolver
 	httpUpstream           HTTPUpstream
 	pluginManager          *PluginManager
 	deferredService        *DeferredService

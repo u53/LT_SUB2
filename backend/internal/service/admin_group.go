@@ -572,6 +572,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		I18n:                            i18n,
 		Platform:                        platform,
 		RateMultiplier:                  input.RateMultiplier,
+		AgentDistributionEnabled:        agentDistributionEnabledOrDefault(input.AgentDistributionEnabled),
 		IsExclusive:                     input.IsExclusive,
 		Status:                          StatusActive,
 		SubscriptionType:                subscriptionType,
@@ -799,6 +800,9 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 			return nil, errors.New("rate_multiplier must be > 0")
 		}
 		group.RateMultiplier = *input.RateMultiplier
+	}
+	if input.AgentDistributionEnabled != nil {
+		group.AgentDistributionEnabled = *input.AgentDistributionEnabled
 	}
 	if input.IsExclusive != nil {
 		group.IsExclusive = *input.IsExclusive
@@ -1164,6 +1168,14 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 
 	return group, nil
+}
+
+// agentDistributionEnabledOrDefault 未显式提供时默认开启，保持存量分组行为不变。
+func agentDistributionEnabledOrDefault(value *bool) bool {
+	if value == nil {
+		return true
+	}
+	return *value
 }
 
 func normalizeGroupModelPricing(platform string, pricing []ChannelModelPricing) ([]ChannelModelPricing, error) {

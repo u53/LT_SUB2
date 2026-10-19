@@ -112,6 +112,20 @@ func (_c *GroupCreate) SetNillableRateMultiplier(v *float64) *GroupCreate {
 	return _c
 }
 
+// SetAgentDistributionEnabled sets the "agent_distribution_enabled" field.
+func (_c *GroupCreate) SetAgentDistributionEnabled(v bool) *GroupCreate {
+	_c.mutation.SetAgentDistributionEnabled(v)
+	return _c
+}
+
+// SetNillableAgentDistributionEnabled sets the "agent_distribution_enabled" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableAgentDistributionEnabled(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetAgentDistributionEnabled(*v)
+	}
+	return _c
+}
+
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
 func (_c *GroupCreate) SetPeakRateEnabled(v bool) *GroupCreate {
 	_c.mutation.SetPeakRateEnabled(v)
@@ -1103,6 +1117,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultRateMultiplier
 		_c.mutation.SetRateMultiplier(v)
 	}
+	if _, ok := _c.mutation.AgentDistributionEnabled(); !ok {
+		v := group.DefaultAgentDistributionEnabled
+		_c.mutation.SetAgentDistributionEnabled(v)
+	}
 	if _, ok := _c.mutation.PeakRateEnabled(); !ok {
 		v := group.DefaultPeakRateEnabled
 		_c.mutation.SetPeakRateEnabled(v)
@@ -1299,6 +1317,9 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.RateMultiplier(); !ok {
 		return &ValidationError{Name: "rate_multiplier", err: errors.New(`ent: missing required field "Group.rate_multiplier"`)}
+	}
+	if _, ok := _c.mutation.AgentDistributionEnabled(); !ok {
+		return &ValidationError{Name: "agent_distribution_enabled", err: errors.New(`ent: missing required field "Group.agent_distribution_enabled"`)}
 	}
 	if _, ok := _c.mutation.PeakRateEnabled(); !ok {
 		return &ValidationError{Name: "peak_rate_enabled", err: errors.New(`ent: missing required field "Group.peak_rate_enabled"`)}
@@ -1548,6 +1569,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.RateMultiplier(); ok {
 		_spec.SetField(group.FieldRateMultiplier, field.TypeFloat64, value)
 		_node.RateMultiplier = value
+	}
+	if value, ok := _c.mutation.AgentDistributionEnabled(); ok {
+		_spec.SetField(group.FieldAgentDistributionEnabled, field.TypeBool, value)
+		_node.AgentDistributionEnabled = value
 	}
 	if value, ok := _c.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)
@@ -2044,6 +2069,18 @@ func (u *GroupUpsert) UpdateRateMultiplier() *GroupUpsert {
 // AddRateMultiplier adds v to the "rate_multiplier" field.
 func (u *GroupUpsert) AddRateMultiplier(v float64) *GroupUpsert {
 	u.Add(group.FieldRateMultiplier, v)
+	return u
+}
+
+// SetAgentDistributionEnabled sets the "agent_distribution_enabled" field.
+func (u *GroupUpsert) SetAgentDistributionEnabled(v bool) *GroupUpsert {
+	u.Set(group.FieldAgentDistributionEnabled, v)
+	return u
+}
+
+// UpdateAgentDistributionEnabled sets the "agent_distribution_enabled" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateAgentDistributionEnabled() *GroupUpsert {
+	u.SetExcluded(group.FieldAgentDistributionEnabled)
 	return u
 }
 
@@ -3211,6 +3248,20 @@ func (u *GroupUpsertOne) AddRateMultiplier(v float64) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateRateMultiplier() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateRateMultiplier()
+	})
+}
+
+// SetAgentDistributionEnabled sets the "agent_distribution_enabled" field.
+func (u *GroupUpsertOne) SetAgentDistributionEnabled(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetAgentDistributionEnabled(v)
+	})
+}
+
+// UpdateAgentDistributionEnabled sets the "agent_distribution_enabled" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateAgentDistributionEnabled() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateAgentDistributionEnabled()
 	})
 }
 
@@ -4713,6 +4764,20 @@ func (u *GroupUpsertBulk) AddRateMultiplier(v float64) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateRateMultiplier() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateRateMultiplier()
+	})
+}
+
+// SetAgentDistributionEnabled sets the "agent_distribution_enabled" field.
+func (u *GroupUpsertBulk) SetAgentDistributionEnabled(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetAgentDistributionEnabled(v)
+	})
+}
+
+// UpdateAgentDistributionEnabled sets the "agent_distribution_enabled" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateAgentDistributionEnabled() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateAgentDistributionEnabled()
 	})
 }
 

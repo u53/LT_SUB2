@@ -992,6 +992,7 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		I18n:                            g.I18n,
 		Platform:                        g.Platform,
 		RateMultiplier:                  g.RateMultiplier,
+		AgentDistributionEnabled:        g.AgentDistributionEnabled,
 		IsExclusive:                     g.IsExclusive,
 		Status:                          g.Status,
 		Hydrated:                        true,

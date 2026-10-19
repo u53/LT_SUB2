@@ -84,7 +84,8 @@ export interface User {
   linuxdo_bound?: boolean
   oidc_bound?: boolean
   wechat_bound?: boolean
-  role: 'admin' | 'user' | 'observer' // User role for authorization
+  // agent = 代理（分销商）：可发展下级并按分组成本倍率结算佣金
+  role: 'admin' | 'user' | 'observer' | 'agent' // User role for authorization
   balance: number // User balance for API usage
   frozen_balance?: number // Balance currently held by async batch jobs
   concurrency: number // Allowed concurrent requests
@@ -640,6 +641,8 @@ export interface Group {
   fallback_group_id_on_invalid_request: number | null
   // OpenAI Messages 调度开关（用户侧需要此字段判断是否展示 Claude Code 教程）
   allow_messages_dispatch?: boolean
+  // 允许代理分销该分组（false 时代理无法把该分组作为下级拿货分组）
+  agent_distribution_enabled?: boolean
   // OpenAI Live 接口开关
   allow_live: boolean
   default_mapped_model?: string
@@ -689,6 +692,75 @@ export interface AdminGroup extends Group {
 
   // 分组排序
   sort_order: number
+}
+
+// ==================== Agent (代理分销) ====================
+
+/**
+ * 代理详情（GET /admin/agents/:id）。
+ *
+ * `default_child_rate_multiplier` 为 null 表示未设置默认下级折扣，下级按分组公开价计费。
+ * `group_costs` 是 group_id -> 成本倍率 的映射，缺失的分组表示未配置。
+ */
+export interface AgentDetail {
+  user_id: number
+  email: string
+  username: string
+  role?: string
+  enabled: boolean
+  default_child_rate_multiplier: number | null
+  commission_frozen_hours: number
+  note: string
+  available: number
+  frozen: number
+  withdrawn: number
+  total_commission: number
+  group_costs: Record<string, number>
+  created_at: string
+  updated_at: string
+}
+
+/** 代理列表行（GET /admin/agents）。 */
+export interface AgentListItem {
+  user_id: number
+  email: string
+  username: string
+  enabled: boolean
+  child_count: number
+  available: number
+  frozen: number
+  total_commission: number
+  created_at: string
+}
+
+/**
+ * 保存代理档案（PUT /admin/agents/:id）。
+ *
+ * 三个字段都是「显式覆盖」语义，后端按全量表单处理，因此都非可选：
+ * 提交的值就是表单最终状态。`default_child_rate_multiplier` 传 null 表示清除默认折扣。
+ */
+export interface UpdateAgentRequest {
+  enabled: boolean
+  default_child_rate_multiplier: number | null
+  commission_frozen_hours: number
+  note: string
+}
+
+/**
+ * 一项分组成本折扣（PUT 请求体用数组）。
+ *
+ * 提交用数组而不是 map：后端 PUT 按全量替换处理，数组便于前端保持分组顺序，
+ * 也避免了 JSON 对象键只能是字符串带来的 ``"12"`` / 12 转换歧义。
+ * 读取（GET）返回的仍是 map，见 @see AgentDetail.group_costs。
+ */
+export interface AgentGroupCostItem {
+  group_id: number
+  cost_multiplier: number
+}
+
+/** 全量替换代理的分组成本折扣（PUT /admin/agents/:id/group-costs）。 */
+export interface ReplaceAgentGroupCostsRequest {
+  group_costs: AgentGroupCostItem[]
 }
 
 export interface ModelAllowlist {
@@ -900,6 +972,8 @@ export interface CreateGroupRequest {
   reasoning_effort_mappings?: ReasoningEffortMapping[]
   require_oauth_only?: boolean
   require_privacy_set?: boolean
+  // 允许代理分销该分组（默认 true；后端未支持时字段被忽略）
+  agent_distribution_enabled?: boolean
   // 从指定分组复制账号
   copy_accounts_from_group_ids?: number[]
 }
@@ -970,6 +1044,8 @@ export interface UpdateGroupRequest {
   reasoning_effort_mappings?: ReasoningEffortMapping[]
   require_oauth_only?: boolean
   require_privacy_set?: boolean
+  // 允许代理分销该分组（默认 true；后端未支持时字段被忽略）
+  agent_distribution_enabled?: boolean
   copy_accounts_from_group_ids?: number[]
 }
 
@@ -2272,7 +2348,7 @@ export interface UpdateUserRequest {
   password?: string
   username?: string
   notes?: string
-  role?: 'admin' | 'user' | 'observer'
+  role?: 'admin' | 'user' | 'observer' | 'agent'
   balance?: number
   concurrency?: number
   rpm_limit?: number
