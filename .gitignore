@@ -185,6 +185,11 @@ issues/
 !docs/new-api-upstream-probe.md
 !docs/account-ops-notifications.md
 
+# 计费币种 / 峰谷定价与代理佣金改造说明
+!docs/billing-cny-analysis.md
+!docs/billing-currency-and-peak-pricing.md
+!docs/agent-commission.md
+
 !docs/typesafe-jev.md
 
 # Upstream regional egress guide
