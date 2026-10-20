@@ -773,10 +773,8 @@ func registerSystemRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		system.POST("/mihomo/nodes/:name/test", h.Admin.System.TestMihomoNode)
 		system.POST("/mihomo/nodes/:name/quality-check", h.Admin.System.CheckMihomoNodeQuality)
 		system.POST("/mihomo/nodes/static-proxies", h.Admin.System.AddMihomoNodesAsStaticProxies)
-		system.GET("/check-updates", h.Admin.System.CheckUpdates)
-		system.GET("/rollback-versions", h.Admin.System.GetRollbackVersions)
-		system.POST("/update", h.Admin.System.PerformUpdate)
-		system.POST("/rollback", h.Admin.System.Rollback)
+		// 本仓库是独立二次开发分支，不提供在线更新/回滚：避免误点后把运行中的
+		// 二进制换回上游版本、丢掉本地功能。版本升级由运维手动构建与部署。
 		system.POST("/restart", h.Admin.System.RestartService)
 	}
 }

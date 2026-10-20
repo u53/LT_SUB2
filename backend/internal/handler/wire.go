@@ -180,10 +180,13 @@ func ProvideBatchImageHandler(
 	return h
 }
 
-// ProvideSystemHandler creates admin.SystemHandler with UpdateService and the
-// Mihomo node checks backed by the admin proxy diagnostics.
-func ProvideSystemHandler(updateService *service.UpdateService, lockService *service.SystemOperationLockService, adminService service.AdminService) *admin.SystemHandler {
-	h := admin.NewSystemHandler(updateService, lockService)
+// ProvideSystemHandler creates admin.SystemHandler with the Mihomo node checks
+// backed by the admin proxy diagnostics.
+//
+// 不再注入 UpdateService：本分支是独立二次开发，不提供在线更新/回滚，
+// 避免误操作把运行中的二进制换回上游版本。
+func ProvideSystemHandler(lockService *service.SystemOperationLockService, adminService service.AdminService, buildInfo BuildInfo) *admin.SystemHandler {
+	h := admin.NewSystemHandler(buildInfo.Version, lockService)
 	h.SetMihomoNodeChecker(adminService)
 	return h
 }

@@ -7,11 +7,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Toast, ToastType, PublicSettings } from '@/types'
 import { i18n } from '@/i18n'
-import {
-  checkUpdates as checkUpdatesAPI,
-  type VersionInfo,
-  type ReleaseInfo
-} from '@/api/admin/system'
+import { getVersion as getVersionAPI, type VersionInfo } from '@/api/admin/system'
 import { getPublicSettings as fetchPublicSettingsAPI } from '@/api/auth'
 
 export const useAppStore = defineStore('app', () => {
@@ -26,7 +22,7 @@ export const useAppStore = defineStore('app', () => {
   // Public settings cache state
   const publicSettingsLoaded = ref<boolean>(false)
   const publicSettingsLoading = ref<boolean>(false)
-  const siteName = ref<string>('Sub2API')
+  const siteName = ref<string>('朗涂云 API')
   const siteLogo = ref<string>('')
   const siteVersion = ref<string>('')
   const contactInfo = ref<string>('')
@@ -35,14 +31,10 @@ export const useAppStore = defineStore('app', () => {
   const cachedPublicSettings = ref<PublicSettings | null>(null)
   let publicSettingsRequest: Promise<PublicSettings | null> | null = null
 
-  // Version cache state
+  // Version state：本分支不联网检查更新，只保存当前版本号。
   const versionLoaded = ref<boolean>(false)
   const versionLoading = ref<boolean>(false)
   const currentVersion = ref<string>('')
-  const latestVersion = ref<string>('')
-  const hasUpdate = ref<boolean>(false)
-  const buildType = ref<string>('source')
-  const releaseInfo = ref<ReleaseInfo | null>(null)
 
   // Auto-incrementing ID for toasts
   let toastIdCounter = 0
@@ -237,35 +229,23 @@ export const useAppStore = defineStore('app', () => {
   // ==================== Version Management ====================
 
   /**
-   * Fetch version info (uses cache unless force=true)
-   * @param force - Force refresh from API
+   * Fetch current version (cached unless force=true).
+   *
+   * 只读取本机版本号，不访问 GitHub：本分支不支持在线更新，
+   * 避免把运行中的二进制换成上游版本。
    */
   async function fetchVersion(force = false): Promise<VersionInfo | null> {
-    // Return cached data if available and not forcing refresh
     if (versionLoaded.value && !force) {
-      return {
-        current_version: currentVersion.value,
-        latest_version: latestVersion.value,
-        has_update: hasUpdate.value,
-        build_type: buildType.value,
-        release_info: releaseInfo.value || undefined,
-        cached: true
-      }
+      return { version: currentVersion.value }
     }
-
-    // Prevent duplicate requests
     if (versionLoading.value) {
       return null
     }
 
     versionLoading.value = true
     try {
-      const data = await checkUpdatesAPI(force)
-      currentVersion.value = data.current_version
-      latestVersion.value = data.latest_version
-      hasUpdate.value = data.has_update
-      buildType.value = data.build_type || 'source'
-      releaseInfo.value = data.release_info || null
+      const data = await getVersionAPI()
+      currentVersion.value = data.version
       versionLoaded.value = true
       return data
     } catch (error) {
@@ -277,11 +257,10 @@ export const useAppStore = defineStore('app', () => {
   }
 
   /**
-   * Clear version cache (e.g., after update)
+   * Clear version cache (e.g. after a manual deployment).
    */
   function clearVersionCache(): void {
     versionLoaded.value = false
-    hasUpdate.value = false
   }
 
   // ==================== Public Settings Management ====================
@@ -294,7 +273,7 @@ export const useAppStore = defineStore('app', () => {
       window.__APP_CONFIG__ = { ...config }
     }
     cachedPublicSettings.value = config
-    siteName.value = config.site_name || 'Sub2API'
+    siteName.value = config.site_name || '朗涂云 API'
     siteLogo.value = config.site_logo || ''
     siteVersion.value = config.version || ''
     contactInfo.value = config.contact_info || ''
@@ -462,10 +441,6 @@ export const useAppStore = defineStore('app', () => {
     versionLoaded,
     versionLoading,
     currentVersion,
-    latestVersion,
-    hasUpdate,
-    buildType,
-    releaseInfo,
 
     // Computed
     hasActiveToasts,
