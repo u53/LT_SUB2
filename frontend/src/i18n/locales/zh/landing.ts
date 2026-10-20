@@ -194,8 +194,8 @@ export default {
 
   // Setup Wizard
   setup: {
-    title: '朗涂云 API 安装向导',
-    description: '配置您的朗涂云 API 实例',
+    title: '朗途云 API 安装向导',
+    description: '配置您的朗途云 API 实例',
     database: {
       title: '数据库配置',
       description: '连接到您的 PostgreSQL 数据库',

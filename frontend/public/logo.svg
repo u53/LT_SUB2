@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
-  <title id="title">朗涂云 API</title>
+  <title id="title">朗途云 API</title>
   <desc id="desc">Langtu Cloud API 的 LT 字母标志，配青蓝渐变与云弧线。</desc>
   <defs>
     <linearGradient id="lt-bg" x1="72" y1="44" x2="442" y2="478" gradientUnits="userSpaceOnUse">

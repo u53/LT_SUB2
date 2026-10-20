@@ -22,7 +22,7 @@ const (
 	quotaDimWeekly = "weekly"
 	quotaDimTotal  = "total"
 
-	defaultSiteName = "朗涂云 API"
+	defaultSiteName = "朗途云 API"
 )
 
 // quotaDimLabels maps dimension names to display labels.

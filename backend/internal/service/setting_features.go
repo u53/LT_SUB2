@@ -331,7 +331,7 @@ func parseAuditLogRetentionDays(value string) int {
 func (s *SettingService) GetSiteName(ctx context.Context) string {
 	value, err := s.settingRepo.GetValue(ctx, SettingKeySiteName)
 	if err != nil || value == "" {
-		return "朗涂云 API"
+		return "朗途云 API"
 	}
 	return value
 }
