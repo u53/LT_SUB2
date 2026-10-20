@@ -15,12 +15,12 @@ export default {
     getStarted: 'Get Started',
     goToDashboard: 'Go to Dashboard',
     // User-focused value proposition
-    heroSubtitle: 'One Key, All AI Models',
-    heroDescription: 'No need to manage multiple subscriptions. Access Claude, GPT, Gemini and more with a single API key',
+    heroSubtitle: 'One API key for leading Chinese LLMs',
+    heroDescription: 'Access DeepSeek, Kimi, Zhipu GLM and MiniMax through one endpoint, billed in CNY at official list prices',
     tags: {
-      subscriptionToApi: 'Subscription to API',
-      stickySession: 'Session Persistence',
-      realtimeBilling: 'Pay As You Go'
+      domesticModels: 'Chinese LLM focus',
+      rmbBilling: 'CNY billing',
+      peakPricing: 'Transparent peak pricing'
     },
     // Pain points section
     painPoints: {
@@ -50,12 +50,12 @@ export default {
       subtitle: 'Three simple steps to stress-free AI access'
     },
     features: {
-      unifiedGateway: 'One-Click Access',
-      unifiedGatewayDesc: 'Get a single API key to call all connected AI models. No separate applications needed.',
-      multiAccount: 'Always Reliable',
-      multiAccountDesc: 'Smart routing across multiple upstream accounts with automatic failover. Say goodbye to errors.',
-      balanceQuota: 'Pay What You Use',
-      balanceQuotaDesc: 'Usage-based billing with quota limits. Full visibility into team consumption.'
+      unifiedGateway: 'Direct Chinese LLM access',
+      unifiedGatewayDesc: 'One API key for DeepSeek, Kimi, Zhipu GLM and MiniMax, with OpenAI / Claude / Gemini compatible endpoints.',
+      multiAccount: 'Stable routing',
+      multiAccountDesc: 'Account pools with automatic failover and sticky sessions reduce errors from single-account rate limits.',
+      balanceQuota: 'Usage-based billing in CNY',
+      balanceQuotaDesc: 'Official list prices, separate cache-hit and peak/off-peak rates, itemized usage and configurable quotas.'
     },
     // Comparison section
     comparison: {
@@ -94,14 +94,16 @@ export default {
       }
     },
     providers: {
-      title: 'Supported AI Models',
-      description: 'One API, Multiple Choices',
+      title: 'Supported Chinese LLMs',
+      description: 'One API key across the leading Chinese model providers',
       supported: 'Supported',
-      soon: 'Soon',
-      claude: 'Claude',
-      gemini: 'Gemini',
-      antigravity: 'Antigravity',
-      more: 'More'
+      soon: 'Continuously adding',
+      deepseek: 'DeepSeek',
+      kimi: 'Kimi',
+      glm: 'Zhipu GLM',
+      minimax: 'MiniMax',
+      more: 'More models',
+      compatible: 'Also compatible with OpenAI / Claude / Gemini protocols'
     },
     // CTA section
     cta: {
@@ -192,8 +194,8 @@ export default {
 
   // Setup Wizard
   setup: {
-    title: 'Sub2API Setup',
-    description: 'Configure your Sub2API instance',
+    title: 'Langtu Cloud API Setup',
+    description: 'Configure your Langtu Cloud API instance',
     database: {
       title: 'Database Configuration',
       description: 'Connect to your PostgreSQL database',

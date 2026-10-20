@@ -15,12 +15,12 @@ export default {
     getStarted: '立即开始',
     goToDashboard: '进入控制台',
     // 新增：面向用户的价值主张
-    heroSubtitle: '一个密钥，畅用多个 AI 模型',
-    heroDescription: '无需管理多个订阅账号，一站式接入 Claude、GPT、Gemini 等主流 AI 服务',
+    heroSubtitle: '一个密钥，畅用国产大模型',
+    heroDescription: 'DeepSeek、Kimi、智谱 GLM、MiniMax 等国产模型统一接入，按官网价人民币计费',
     tags: {
-      subscriptionToApi: '订阅转 API',
-      stickySession: '会话保持',
-      realtimeBilling: '按量计费'
+      domesticModels: '专注国产模型',
+      rmbBilling: '人民币计费',
+      peakPricing: '峰谷价透明'
     },
     // 用户痛点区块
     painPoints: {
@@ -50,12 +50,12 @@ export default {
       subtitle: '简单三步，开始省心使用 AI'
     },
     features: {
-      unifiedGateway: '一键接入',
-      unifiedGatewayDesc: '获取一个 API 密钥，即可调用所有已接入的 AI 模型，无需分别申请。',
-      multiAccount: '稳定可靠',
-      multiAccountDesc: '智能调度多个上游账号，自动切换和负载均衡，告别频繁报错。',
-      balanceQuota: '用多少付多少',
-      balanceQuotaDesc: '按实际使用量计费，支持设置配额上限，团队用量一目了然。'
+      unifiedGateway: '国产模型直连',
+      unifiedGatewayDesc: '一个 API Key 即可调用 DeepSeek、Kimi、智谱 GLM、MiniMax 等国产模型，同时兼容 OpenAI / Claude / Gemini 协议。',
+      multiAccount: '稳定调度',
+      multiAccountDesc: '多账号池自动切换与故障转移，降低单一账号限流带来的报错，长会话保持粘性。',
+      balanceQuota: '按量计费',
+      balanceQuotaDesc: '按官网价人民币计费，缓存命中与峰谷时段分别计价，用量明细可查、额度可限。'
     },
     // 优势对比
     comparison: {
@@ -94,14 +94,16 @@ export default {
       }
     },
     providers: {
-      title: '已支持的 AI 模型',
-      description: '一个 API，多种选择',
+      title: '已支持的国产模型',
+      description: '一个 API Key，覆盖主流国产大模型',
       supported: '已支持',
-      soon: '即将推出',
-      claude: 'Claude',
-      gemini: 'Gemini',
-      antigravity: 'Antigravity',
-      more: '更多'
+      soon: '持续接入',
+      deepseek: 'DeepSeek',
+      kimi: 'Kimi',
+      glm: '智谱 GLM',
+      minimax: 'MiniMax',
+      more: '更多模型',
+      compatible: '同时兼容 OpenAI / Claude / Gemini 协议'
     },
     // CTA 区块
     cta: {
@@ -192,8 +194,8 @@ export default {
 
   // Setup Wizard
   setup: {
-    title: 'Sub2API 安装向导',
-    description: '配置您的 Sub2API 实例',
+    title: '朗涂云 API 安装向导',
+    description: '配置您的朗涂云 API 实例',
     database: {
       title: '数据库配置',
       description: '连接到您的 PostgreSQL 数据库',

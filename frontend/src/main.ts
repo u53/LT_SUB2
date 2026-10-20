@@ -45,8 +45,9 @@ async function bootstrap() {
   appStore.initFromInjectedConfig()
 
   // Set document title immediately after config is loaded
-  if (appStore.siteName && appStore.siteName !== 'Sub2API') {
-    document.title = `${appStore.siteName} - AI API Gateway`
+  // 站点名来自注入配置；静态 index.html 的标题只作为脚本执行前的兜底。
+  if (appStore.siteName) {
+    document.title = `${appStore.siteName} - 国产大模型 API 平台`
   }
   updateFavicon(appStore.siteLogo)
 
