@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/stretchr/testify/require"
 )
 
@@ -274,21 +275,46 @@ func TestCalculateCostUnified_ChannelTimePricingDoesNotApplyOutsideMatchingTime(
 	resolved := channelTimeResolvedForTest(&ModelPricing{InputPricePerToken: 0.001}, nil)
 	billing := NewBillingService(&config.Config{}, nil)
 
-	for _, pricingAt := range []time.Time{
-		time.Time{},
-		time.Date(2026, 8, 17, 5, 0, 0, 0, time.UTC),
-	} {
-		cost, err := billing.CalculateCostUnified(CostInput{
-			Ctx:       context.Background(),
-			Model:     "model",
-			Tokens:    UsageTokens{InputTokens: 1000},
-			Resolver:  &ModelPricingResolver{},
-			Resolved:  resolved,
-			PricingAt: pricingAt,
-		})
-		require.NoError(t, err)
-		require.InDelta(t, 1.0, cost.TotalCost, 1e-12)
-	}
+	// 固定一个明确落在时段外的时刻（北京 13:00，时段是 09:00–12:00）。
+	// 不能用零值：零值语义是「按当前时刻判定」，遇到高峰时段会命中倍率，
+	// 这样的断言会随运行时间在 1 和 2 之间漂移。
+	cost, err := billing.CalculateCostUnified(CostInput{
+		Ctx:       context.Background(),
+		Model:     "model",
+		Tokens:    UsageTokens{InputTokens: 1000},
+		Resolver:  &ModelPricingResolver{},
+		Resolved:  resolved,
+		PricingAt: time.Date(2026, 8, 17, 5, 0, 0, 0, time.UTC),
+	})
+	require.NoError(t, err)
+	require.InDelta(t, 1.0, cost.TotalCost, 1e-12)
+}
+
+// 零值 PricingAt 回退到当前时刻，与显式传入 timezone.Now() 结果一致。
+// 这是先前「渠道分时在零值时静默失效」修复后的预期行为。
+func TestCalculateCostUnified_ChannelTimePricingZeroPricingAtFallsBackToNow(t *testing.T) {
+	resolved := channelTimeResolvedForTest(&ModelPricing{InputPricePerToken: 0.001}, nil)
+	billing := NewBillingService(&config.Config{}, nil)
+
+	zeroCost, err := billing.CalculateCostUnified(CostInput{
+		Ctx:      context.Background(),
+		Model:    "model",
+		Tokens:   UsageTokens{InputTokens: 1000},
+		Resolver: &ModelPricingResolver{},
+		Resolved: resolved,
+	})
+	require.NoError(t, err)
+
+	nowCost, err := billing.CalculateCostUnified(CostInput{
+		Ctx:       context.Background(),
+		Model:     "model",
+		Tokens:    UsageTokens{InputTokens: 1000},
+		Resolver:  &ModelPricingResolver{},
+		Resolved:  resolved,
+		PricingAt: timezone.Now(),
+	})
+	require.NoError(t, err)
+	require.InDelta(t, nowCost.TotalCost, zeroCost.TotalCost, 1e-12)
 }
 
 func TestApplyCostBreakdownMultiplierScalesAllMonetaryFields(t *testing.T) {

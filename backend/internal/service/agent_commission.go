@@ -207,13 +207,18 @@ func ResolveSellingMultiplier(childOverride, agentDefault *float64, groupDefault
 // 管理员为该代理在该分组配置了成本倍率时用配置值；否则回落到代理自己的售价倍率，
 // 即"代理自用按成本价"：代理自己调用的用量不产生佣金（ChildRate == AgentCostRate），
 // 避免管理员只配售价就意外让代理从自己的用量里赚差价。
-func ResolveAgentCostMultiplier(configured *float64, agentOwnSellingRate float64) float64 {
+// ResolveAgentCostMultiplier 解析代理成本倍率。
+//
+// configured 为管理员按「代理 × 分组」配置的成本折扣；未配置时回落到 fallbackRate。
+// 计费链路传入的是本次请求的售价倍率，因此未配置成本时差价恒为 0、不产生佣金。
+// 这是有意选择的保守方向：少发佣金可以事后补发，按猜测的成本多发则难以追回。
+func ResolveAgentCostMultiplier(configured *float64, fallbackRate float64) float64 {
 	if configured != nil {
 		if v, ok := NormalizeMultiplier(*configured); ok {
 			return v
 		}
 	}
-	if v, ok := NormalizeMultiplier(agentOwnSellingRate); ok {
+	if v, ok := NormalizeMultiplier(fallbackRate); ok {
 		return v
 	}
 	return 1.0

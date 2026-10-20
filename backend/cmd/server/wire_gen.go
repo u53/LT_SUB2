@@ -114,7 +114,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	newAPIAuthorizationRepository := repository.NewNewAPIAuthorizationRepository(db)
 	accountOpsService := service.ProvideAccountOpsService(settingRepository, accountOpsRepository, emailService, accountRepository, groupRepository, configConfig, secretEncryptor, usageCache, usageLogRepository, geminiQuotaService, newAPIAuthorizationRepository)
 	opsRepository := repository.NewOpsRepository(db)
-	usageBillingRepository := repository.NewUsageBillingRepository(client, db)
+	usageBillingRepository := repository.ProvideUsageBillingRepository(client, db, settingService)
 	gatewayCache := repository.NewGatewayCache(redisClient)
 	schedulerOutboxRepository := repository.NewSchedulerOutboxRepository(db)
 	regionalSchedulerAuthority := repository.NewRegionalSchedulerAuthority(db)

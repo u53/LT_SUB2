@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -15,22 +16,58 @@ import (
 
 type usageBillingRepository struct {
 	db *sql.DB
-	// agentCommissionFrozenHours 解析代理佣金冻结期；为 nil 时佣金直接进可提现余额。
-	// 做成函数而非值，是因为冻结期是系统设置，可在运行期被管理员修改。
-	agentCommissionFrozenHours func(ctx context.Context) int
+
+	// agentCommissionSettings 读取代理佣金总开关与冻结期。
+	// 做成函数而非值：两者都是系统设置，可在运行期被管理员修改。
+	agentCommissionSettings func(ctx context.Context) (enabled bool, frozenHours int)
+
+	// 设置读取带 10s 缓存：佣金只在有代理的请求上触发，但仍属于请求级热路径，
+	// 不应每个请求都查一次 settings 表。管理员改开关后最多 10s 生效。
+	agentSettingsMu      sync.Mutex
+	agentSettingsCached  *agentCommissionSettingsSnapshot
+}
+
+type agentCommissionSettingsSnapshot struct {
+	enabled     bool
+	frozenHours int
+	expiresAt   time.Time
 }
 
 func NewUsageBillingRepository(_ *dbent.Client, sqlDB *sql.DB) service.UsageBillingRepository {
 	return &usageBillingRepository{db: sqlDB}
 }
 
-// SetAgentCommissionFrozenHours 注入佣金冻结期读取函数（wire 装配时调用）。
-// 未注入时按 0 处理，即佣金立即进入可提现余额。
-func (r *usageBillingRepository) SetAgentCommissionFrozenHours(loader func(ctx context.Context) int) {
+// SetAgentCommissionSettings 注入佣金总开关与冻结期读取函数（wire 装配时调用）。
+// 未注入时按「关闭、不冻结」处理，与设置项的默认值一致。
+func (r *usageBillingRepository) SetAgentCommissionSettings(loader func(ctx context.Context) (enabled bool, frozenHours int)) {
 	if r == nil {
 		return
 	}
-	r.agentCommissionFrozenHours = loader
+	r.agentCommissionSettings = loader
+}
+
+// agentCommissionSettingsAt 返回带短 TTL 缓存的佣金设置。
+func (r *usageBillingRepository) agentCommissionSettingsAt(ctx context.Context) (bool, int) {
+	r.agentSettingsMu.Lock()
+	if cached := r.agentSettingsCached; cached != nil && time.Now().Before(cached.expiresAt) {
+		defer r.agentSettingsMu.Unlock()
+		return cached.enabled, cached.frozenHours
+	}
+	r.agentSettingsMu.Unlock()
+
+	enabled, frozenHours := false, 0
+	if r.agentCommissionSettings != nil {
+		enabled, frozenHours = r.agentCommissionSettings(ctx)
+	}
+
+	r.agentSettingsMu.Lock()
+	r.agentSettingsCached = &agentCommissionSettingsSnapshot{
+		enabled:     enabled,
+		frozenHours: frozenHours,
+		expiresAt:   time.Now().Add(10 * time.Second),
+	}
+	r.agentSettingsMu.Unlock()
+	return enabled, frozenHours
 }
 
 func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBillingCommand) (_ *service.UsageBillingApplyResult, err error) {
@@ -253,8 +290,14 @@ func (r *usageBillingRepository) applyAgentCommissionEffect(ctx context.Context,
 	}
 
 	frozenHours := 0
-	if r.agentCommissionFrozenHours != nil {
-		frozenHours = r.agentCommissionFrozenHours(ctx)
+	enabled, configuredFrozenHours := r.agentCommissionSettingsAt(ctx)
+	if !enabled {
+		// 总开关关闭时不落任何佣金流水，也不动账户。
+		// 口径与设置项默认值一致（默认关闭），避免部署后意外产生资金流水。
+		return nil
+	}
+	if configuredFrozenHours > 0 {
+		frozenHours = configuredFrozenHours
 	}
 	status := AgentCommissionStatusAvailable
 	var frozenUntil *time.Time

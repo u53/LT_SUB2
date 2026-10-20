@@ -930,9 +930,9 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	}
 
 	// 代理佣金：只在一级代理存在时计算。
-	// 售价倍率取本次请求实际生效的 multiplier（已含用户专属/代理默认/账号/高峰），
-	// 成本倍率取管理员为该代理在该分组配置的值；未配置时回落到代理自身售价，
-	// 即代理自用按成本价、对其下级也不产生佣金。
+	// 售价倍率取本次请求实际生效的 multiplier（已含用户专属/代理默认/账号/高峰）。
+	// 成本倍率取管理员为该代理在该分组配置的值；未配置时不产生佣金（差价为 0），
+	// 而不是猜测一个成本——少发佣金可以事后补，多发则难以追回。
 	agentSnapshot := s.resolveAgentCommission(ctx, user.ID, apiKey.GroupID, cost.TotalCost, multiplier)
 
 	simpleModeKeyRateLimitOnly := simpleModeKeyRateLimitBillingEnabled(s.cfg, apiKey)

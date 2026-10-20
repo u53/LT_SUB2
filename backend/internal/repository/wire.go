@@ -13,6 +13,20 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// ProvideUsageBillingRepository 装配计费仓储，并注入代理佣金设置读取。
+//
+// 用 provider 而不是直接列出构造函数：佣金总开关与冻结期是系统设置，
+// 需要在仓储构造后注入读取函数，而 wire 的 ProviderSet 只能列构造函数。
+func ProvideUsageBillingRepository(client *ent.Client, sqlDB *sql.DB, settings *service.SettingService) service.UsageBillingRepository {
+	repo := NewUsageBillingRepository(client, sqlDB)
+	if concrete, ok := repo.(*usageBillingRepository); ok {
+		concrete.SetAgentCommissionSettings(func(ctx context.Context) (bool, int) {
+			return settings.IsAgentCommissionEnabled(ctx), settings.GetAgentCommissionFrozenHours(ctx)
+		})
+	}
+	return repo
+}
+
 // ProvideConcurrencyCache 创建并发控制缓存，从配置读取 TTL 参数
 // 性能优化：TTL 可配置，支持长时间运行的 LLM 请求场景
 func ProvideConcurrencyCache(rdb *redis.Client, cfg *config.Config, db *sql.DB) (service.ConcurrencyCache, error) {
@@ -96,7 +110,7 @@ var ProviderSet = wire.NewSet(
 	NewAnnouncementRepository,
 	NewAnnouncementReadRepository,
 	NewUsageLogRepository,
-	NewUsageBillingRepository,
+	ProvideUsageBillingRepository,
 	NewBatchImageRepository,
 	NewGeminiCachedContentRepository,
 	NewIdempotencyRepository,

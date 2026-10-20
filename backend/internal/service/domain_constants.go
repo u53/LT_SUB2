@@ -240,7 +240,6 @@ const (
 	SettingKeyAgentMinCommission        = "agent_min_commission"         // 最低计佣阈值（低于该值的差价丢弃）
 	SettingKeyAgentFrozenHours          = "agent_commission_frozen_hours" // 佣金冻结期（小时，0=不冻结）
 	SettingKeyAgentMinWithdraw          = "agent_min_withdraw"           // 提现最低额（0=不限）
-	SettingKeyAgentDefaultRatePercent   = "agent_default_rate_percent"   // 代理默认拿货折扣（百分比，用于新建代理时的初始值）
 	SettingKeyRiskControlEnabled                  = "risk_control_enabled"                  // 是否启用风控中心入口与审计链路
 	SettingKeyContentModerationConfig             = "content_moderation_config"             // 内容审计配置（JSON）
 	SettingKeyCyberSessionBlockEnabled            = "cyber_session_block_enabled"           // cyber 命中后会话级自动屏蔽总开关(默认关)
